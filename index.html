@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TaskFlow — 個人タスク管理</title>
+<meta name="description" content="プライベート・仕事のタスクとメモを一元管理するパーソナルタスク管理アプリ" />
+<meta name="theme-color" content="#0b0b0f" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
+</head>
+<body data-theme="dark">
+<div id="app">
+
+  <!-- ===== Desktop Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">TaskFlow</span>
+    </div>
+
+    <nav class="nav" id="sideNav">
+      <button class="nav-item is-active" data-view="today"><span class="ic">🏠</span>今日</button>
+      <button class="nav-item" data-view="inbox"><span class="ic">📝</span>メモ / Inbox<span class="badge" id="inboxBadge" hidden>0</span></button>
+      <button class="nav-item" data-view="tasks"><span class="ic">✅</span>すべてのタスク</button>
+      <button class="nav-item" data-view="gantt"><span class="ic">📊</span>ガントチャート</button>
+      <button class="nav-item" data-view="settings"><span class="ic">⚙️</span>設定</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-primary btn-block" id="sideQuickAddBtn">＋ 新規タスク</button>
+      <div class="stat-line">今日の残り <strong id="todayCount">0</strong> 件</div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+    <header class="topbar">
+      <h1 id="viewTitle">今日</h1>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="notifBtn" title="通知を有効化">🔔</button>
+        <button class="btn-primary" id="quickAddBtn">＋ 新規</button>
+      </div>
+    </header>
+
+    <!-- ---- Today View ---- -->
+    <section class="view" id="view-today">
+      <div class="inbox-banner" id="inboxBanner" hidden>
+        📝 未整理のメモが <strong id="inboxBannerCount">0</strong> 件あります
+        <button class="link-btn" data-goto="inbox">確認する →</button>
+      </div>
+
+      <div id="overdueBlock" hidden>
+        <h2 class="section-title danger">⏰ 期限超過</h2>
+        <ul class="task-list" id="overdueList"></ul>
+      </div>
+
+      <h2 class="section-title">📅 今日やること</h2>
+      <ul class="task-list" id="todayList"></ul>
+      <p class="empty-hint" id="todayEmptyHint" hidden>今日のタスクはありません。ゆっくりどうぞ 🌿</p>
+
+      <h2 class="section-title muted">🔜 明日以降（直近5件）</h2>
+      <ul class="task-list" id="upcomingList"></ul>
+    </section>
+
+    <!-- ---- Inbox View ---- -->
+    <section class="view" id="view-inbox" hidden>
+      <form id="inboxForm" class="inbox-capture">
+        <textarea id="inboxInput" placeholder="思いついたことをここにサッと書く…（Enterで追加 / Shift+Enterで改行）" rows="3"></textarea>
+        <button type="submit" class="btn-primary">追加</button>
+      </form>
+      <ul class="inbox-list" id="inboxList"></ul>
+      <p class="empty-hint" id="inboxEmptyHint" hidden>メモはありません。何か思いついたら書いてみましょう。</p>
+    </section>
+
+    <!-- ---- All Tasks View ---- -->
+    <section class="view" id="view-tasks" hidden>
+      <div class="filter-row" id="filterRow"></div>
+      <label class="toggle-line">
+        <input type="checkbox" id="showDoneToggle" />
+        完了済みも表示する
+      </label>
+      <div id="tasksByTag"></div>
+    </section>
+
+    <!-- ---- Gantt View (desktop only) ---- -->
+    <section class="view" id="view-gantt" hidden>
+      <p class="hint-text">開始日・終了日が設定されているタスクのみ表示されます。タスク編集画面で「ガントチャート用の日付」を設定してください。</p>
+      <div id="ganttContainer" class="gantt-container"></div>
+      <p class="empty-hint" id="ganttEmptyHint" hidden>ガントチャート用のタスクがまだありません。</p>
+      <p class="mobile-only-hint">📱 ガントチャートはPC画面でご利用いただけます。</p>
+    </section>
+
+    <!-- ---- Settings View ---- -->
+    <section class="view" id="view-settings" hidden>
+      <div class="settings-card">
+        <h3>🔔 通知</h3>
+        <p class="muted-text">ブラウザ通知でリマインダーを受け取れます（アプリを開いている必要があります）。</p>
+        <button class="btn-secondary" id="settingsNotifBtn">通知を許可する</button>
+        <span class="status-pill" id="notifStatusPill">未設定</span>
+      </div>
+
+      <div class="settings-card">
+        <h3>🎨 テーマ</h3>
+        <p class="muted-text">基本はダークモードです。お好みでライトモードに切り替えられます。</p>
+        <label class="toggle-line">
+          <input type="checkbox" id="lightModeToggle" />
+          ライトモードにする
+        </label>
+      </div>
+
+      <div class="settings-card">
+        <h3>📲 ホーム画面に追加</h3>
+        <p class="muted-text">ホーム画面に追加すると、アプリのようにワンタップで起動できます。</p>
+        <button class="btn-secondary" id="installBtn" hidden>ホーム画面に追加</button>
+        <details class="ios-hint">
+          <summary>iPhoneでの追加方法</summary>
+          <p>Safariで開き、共有ボタン <strong>□↑</strong> → 「ホーム画面に追加」をタップ</p>
+        </details>
+      </div>
+
+      <div class="settings-card">
+        <h3>💾 バックアップ</h3>
+        <p class="muted-text">データはこの端末のブラウザ内に保存されています。他の端末に移す場合は、エクスポートしたファイルをインポートしてください。</p>
+        <div class="btn-row">
+          <button class="btn-secondary" id="exportBtn">エクスポート</button>
+          <label class="btn-secondary file-btn">
+            インポート
+            <input type="file" id="importFile" accept="application/json" hidden />
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-card danger-card">
+        <h3>🗑 データを削除</h3>
+        <p class="muted-text">すべてのタスク・メモを削除します。元に戻せません。</p>
+        <button class="btn-danger" id="clearAllBtn">全データを削除</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Mobile Bottom Nav ===== -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bn-item is-active" data-view="today"><span class="ic">🏠</span><span class="lb">今日</span></button>
+    <button class="bn-item" data-view="inbox"><span class="ic">📝</span><span class="lb">メモ</span><span class="badge" id="inboxBadgeMobile" hidden>0</span></button>
+    <button class="bn-fab" id="fabBtn">＋</button>
+    <button class="bn-item" data-view="tasks"><span class="ic">✅</span><span class="lb">タスク</span></button>
+    <button class="bn-item" data-view="settings"><span class="ic">⚙️</span><span class="lb">設定</span></button>
+  </nav>
+</div>
+
+<!-- ===== Task Editor Modal ===== -->
+<div class="modal-overlay" id="taskModalOverlay" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">新規タスク</h3>
+      <button class="icon-btn" id="modalCloseBtn">✕</button>
+    </div>
+    <form id="taskForm" class="modal-body">
+      <input type="hidden" id="taskId" />
+
+      <label class="field-label">タイトル</label>
+      <input type="text" id="taskTitle" class="text-input" placeholder="例）Noteに投稿する" required />
+
+      <label class="field-label">カテゴリ</label>
+      <div class="pill-group" id="categoryPills">
+        <button type="button" class="pill" data-category="private">🟣 プライベート</button>
+        <button type="button" class="pill is-active" data-category="work">🔵 仕事</button>
+      </div>
+
+      <label class="field-label">タグ</label>
+      <div class="pill-group" id="tagPills"></div>
+
+      <div class="field-grid">
+        <div>
+          <label class="field-label">期限日</label>
+          <input type="date" id="taskDue" class="text-input" />
+        </div>
+        <div>
+          <label class="field-label">リマインド日時</label>
+          <input type="datetime-local" id="taskReminder" class="text-input" />
+        </div>
+      </div>
+
+      <details class="gantt-fields">
+        <summary>ガントチャート用の日付（任意）</summary>
+        <div class="field-grid">
+          <div>
+            <label class="field-label">開始日</label>
+            <input type="date" id="taskStart" class="text-input" />
+          </div>
+          <div>
+            <label class="field-label">終了日</label>
+            <input type="date" id="taskEnd" class="text-input" />
+          </div>
+        </div>
+      </details>
+
+      <label class="field-label">メモ</label>
+      <textarea id="taskNotes" class="text-input" rows="3" placeholder="詳細メモ（任意）"></textarea>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cal" id="gcalBtn">📅 Googleカレンダーに追加</button>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-danger btn-ghost" id="deleteTaskBtn" hidden>削除</button>
+        <div class="spacer"></div>
+        <button type="button" class="btn-secondary" id="cancelTaskBtn">キャンセル</button>
+        <button type="submit" class="btn-primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Convert-to-task Modal reuses same modal ===== -->
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
