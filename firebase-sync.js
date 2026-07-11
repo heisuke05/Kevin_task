@@ -60,11 +60,25 @@
           stopListening();
         }
       });
+
+      // Complete a signInWithRedirect flow if we just came back from Google
+      // (used on mobile / installed PWA where popups are unreliable).
+      auth.getRedirectResult().catch((err)=>{
+        console.error("Redirect sign-in failed", err);
+        emitStatus("error");
+      });
+
       return true;
     }catch(e){
       console.error("Firebase init failed", e);
       return false;
     }
+  }
+
+  function isMobileOrStandalone(){
+    const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+    const mobileUA = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    return standalone || mobileUA;
   }
 
   function docRef(uid){
@@ -90,7 +104,20 @@
 
   async function signIn(){
     if(!init()) throw new Error("Firebase not available");
-    return auth.signInWithPopup(provider);
+    if(isMobileOrStandalone()){
+      // Popups are blocked or unreliable on mobile browsers and installed
+      // PWAs, so use the full-page redirect flow there instead.
+      return auth.signInWithRedirect(provider);
+    }
+    try{
+      return await auth.signInWithPopup(provider);
+    }catch(e){
+      const fallbackCodes = ["auth/popup-blocked","auth/cancelled-popup-request","auth/operation-not-supported-in-this-environment"];
+      if(e && fallbackCodes.includes(e.code)){
+        return auth.signInWithRedirect(provider);
+      }
+      throw e;
+    }
   }
   async function signOut(){
     if(!auth) return;
