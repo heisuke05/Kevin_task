@@ -1,10 +1,11 @@
 /* TaskFlow — minimal service worker for offline shell + home-screen install */
-const CACHE_NAME = "taskflow-cache-v1";
+const CACHE_NAME = "taskflow-cache-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./firebase-sync.js",
   "./manifest.json"
 ];
 

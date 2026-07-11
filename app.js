@@ -27,6 +27,19 @@
   let currentFilter = "all";
   let deferredInstallPrompt = null;
 
+  /* ---------------- Cloud sync (Firebase, optional) ---------------- */
+  let applyingRemote = false;
+  let cloudPushTimer = null;
+  let hasDoneInitialSync = false;
+
+  function cloudPushDebounced(){
+    if(!window.TaskFlowCloud || !window.TaskFlowCloud.isSignedIn() || applyingRemote) return;
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(()=>{
+      window.TaskFlowCloud.push(state);
+    }, 800);
+  }
+
   function defaultState(){
     return { tasks: [], inbox: [], settings: { theme: "dark" } };
   }
@@ -46,6 +59,7 @@
   function saveState(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     renderBadges();
+    cloudPushDebounced();
   }
 
   function uid(){
@@ -387,6 +401,95 @@
     }
     $("#lightModeToggle").checked = state.settings.theme === "light";
     $("#installBtn").hidden = !deferredInstallPrompt;
+    updateSyncUI();
+  }
+
+  /* ---------------- Cloud sync UI & wiring ---------------- */
+  let lastSyncStatus = "idle";
+
+  function updateSyncUI(){
+    const cloud = window.TaskFlowCloud;
+    const user = cloud && cloud.isSignedIn() ? cloud.getUser() : null;
+    $("#syncSignedOut").hidden = !!user;
+    $("#syncSignedIn").hidden = !user;
+    if(user){
+      $("#syncUserPhoto").src = user.photoURL || "";
+      $("#syncUserName").textContent = user.displayName || user.email || "ログイン中";
+      const pill = $("#syncStatusPill");
+      pill.classList.remove("on","syncing","error");
+      if(lastSyncStatus === "syncing"){ pill.textContent = "同期中…"; pill.classList.add("syncing"); }
+      else if(lastSyncStatus === "error"){ pill.textContent = "同期エラー"; pill.classList.add("error"); }
+      else { pill.textContent = "同期済み ✓"; pill.classList.add("on"); }
+    }
+  }
+
+  function applyRemoteState(remote){
+    if(!remote) return;
+    applyingRemote = true;
+    state = {
+      tasks: Array.isArray(remote.tasks) ? remote.tasks : [],
+      inbox: Array.isArray(remote.inbox) ? remote.inbox : [],
+      settings: remote.settings || state.settings
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    document.body.dataset.theme = state.settings.theme || "dark";
+    renderBadges();
+    refreshCurrentView();
+    applyingRemote = false;
+  }
+
+  function setupCloudSync(){
+    const cloud = window.TaskFlowCloud;
+    if(!cloud) return;
+
+    $("#googleSignInBtn").addEventListener("click", async ()=>{
+      try{ await cloud.signIn(); }
+      catch(e){ console.error(e); showToast("ログインに失敗しました"); }
+    });
+    $("#googleSignOutBtn").addEventListener("click", async ()=>{
+      await cloud.signOut();
+      showToast("ログアウトしました");
+    });
+
+    cloud.onStatusChange((status)=>{ lastSyncStatus = status; updateSyncUI(); });
+
+    cloud.onAuthChange(async (user)=>{
+      updateSyncUI();
+      if(!user){ hasDoneInitialSync = false; return; }
+      if(hasDoneInitialSync) return;
+      hasDoneInitialSync = true;
+      try{
+        const remote = await cloud.fetchOnce(user.uid);
+        const localHasData = state.tasks.length>0 || state.inbox.length>0;
+        const remoteHasData = remote && (remote.tasks||[]).length>0;
+        if(remoteHasData && localHasData){
+          const useCloud = confirm(
+            "クラウドにも、この端末にもデータがあります。\n" +
+            "「OK」＝クラウドのデータを使う（この端末のデータは上書きされます）\n" +
+            "「キャンセル」＝この端末のデータを使う（クラウドを上書きします）"
+          );
+          if(useCloud){ applyRemoteState(remote); showToast("クラウドのデータを読み込みました"); }
+          else { await cloud.push(state); showToast("この端末のデータをクラウドに送りました"); }
+        } else if(remoteHasData){
+          applyRemoteState(remote);
+          showToast("クラウドのデータを読み込みました");
+        } else {
+          await cloud.push(state);
+          showToast("クラウドにバックアップしました");
+        }
+      }catch(e){
+        console.error("Initial sync failed", e);
+        showToast("同期中にエラーが発生しました");
+      }
+    });
+
+    cloud.onRemoteUpdate((data)=>{
+      if(!hasDoneInitialSync) return; // ignore snapshots that fire before initial merge decision
+      const incoming = JSON.stringify({tasks:data.tasks||[], inbox:data.inbox||[]});
+      const currentJson = JSON.stringify({tasks:state.tasks, inbox:state.inbox});
+      if(incoming === currentJson) return;
+      applyRemoteState(data);
+    });
   }
 
   function requestNotifPermission(){
@@ -473,6 +576,190 @@
     });
   });
 
+  /* ---- Paste category/tag pills (independent state from manual form) ---- */
+  let pasteCategory = "work";
+  let pasteTag = "work_general";
+
+  function buildPasteTagPills(){
+    const wrap = $("#pasteTagPills");
+    wrap.innerHTML = "";
+    TAG_ORDER.filter(id => TAGS[id].category === pasteCategory).forEach(id=>{
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill" + (pasteTag===id ? " is-active" : "");
+      btn.style.borderColor = TAGS[id].color;
+      if(pasteTag===id){ btn.style.background = TAGS[id].color; btn.style.color = "#06070d"; }
+      btn.textContent = TAGS[id].label;
+      btn.addEventListener("click", ()=>{ pasteTag = id; buildPasteTagPills(); });
+      wrap.appendChild(btn);
+    });
+  }
+  $$("#pasteCategoryPills .pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      pasteCategory = btn.dataset.category;
+      pasteTag = TAG_ORDER.find(id=>TAGS[id].category===pasteCategory);
+      $$("#pasteCategoryPills .pill").forEach(b=>b.classList.toggle("is-active", b===btn));
+      buildPasteTagPills();
+    });
+  });
+
+  /* ---- Manual / Paste mode switch ---- */
+  let modalMode = "manual";
+  function setModalMode(mode){
+    modalMode = mode;
+    $("#taskForm").hidden = (mode !== "manual");
+    $("#pasteEntrySection").hidden = (mode !== "paste");
+    $$("#modeSwitch .mode-btn").forEach(b=> b.classList.toggle("is-active", b.dataset.mode===mode));
+  }
+  $$("#modeSwitch .mode-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=> setModalMode(btn.dataset.mode));
+  });
+
+  /* ================= Paste & auto-sort parser ================= */
+  function normalizeText(str){
+    // Full-width digits/parens -> half-width, for easier pattern matching.
+    return str.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+              .replace(/[（]/g, "(").replace(/[）]/g, ")")
+              .replace(/[：]/g, ":").replace(/　/g, " ");
+  }
+
+  const SEPARATOR_RE = /^[=\-_/#*・.]{4,}$/;
+  const BULLET_RE = /^[・\-\*•‣◦]\s*/;
+  const NUMBERED_RE = /^\d{1,2}[.\)]\s+/;
+  const DATE_HEAD_RE = /^(\d{1,2})月(\d{1,2})日\s*(?:\([月火水木金土日]\))?\s*:?\s*/;
+  const SLASH_DATE_RE = /^(\d{1,2})\/(\d{1,2})\s*:?\s*/;
+  const CATEGORY_ONLY_RE = /^(?:[<＜]([^>＞]{1,24})[>＞]|【([^】]{1,24})】|={2,}\s*(.+?)\s*={2,})$/;
+  const SKIP_LINES = new Set(["こんにちは","こんにちは。","以上","以上。","よろしくお願いします","よろしくお願いします。","よろしくお願いいたします","よろしくお願いいたします。","hello","hello,","thank you","thanks"]);
+
+  function inferYear(month, day){
+    const today = new Date();
+    let year = today.getFullYear();
+    const candidate = new Date(year, month-1, day);
+    const diffDays = (candidate - today) / 86400000;
+    if(diffDays < -30) year += 1; // clearly in the past -> assume next year
+    return year;
+  }
+
+  function parseTasksFromText(rawText, categoryLabelDefault){
+    const lines = rawText.split(/\r?\n/);
+    const results = [];
+    let currentDate = null;
+    let currentCategory = null;
+
+    for(let raw of lines){
+      let line = raw.trim();
+      if(!line) continue;
+      if(SEPARATOR_RE.test(line)) continue;
+      if(SKIP_LINES.has(line.toLowerCase())) continue;
+
+      const norm = normalizeText(line);
+
+      const catMatch = norm.match(CATEGORY_ONLY_RE);
+      if(catMatch){
+        currentCategory = (catMatch[1] || catMatch[2] || catMatch[3] || "").trim();
+        continue;
+      }
+
+      let m = norm.match(DATE_HEAD_RE);
+      let month, day, remainderStart = 0;
+      if(m){ month = parseInt(m[1],10); day = parseInt(m[2],10); remainderStart = m[0].length; }
+      else {
+        m = norm.match(SLASH_DATE_RE);
+        if(m){ month = parseInt(m[1],10); day = parseInt(m[2],10); remainderStart = m[0].length; }
+      }
+
+      if(m){
+        const year = inferYear(month, day);
+        const mm = String(month).padStart(2,"0"), dd = String(day).padStart(2,"0");
+        currentDate = `${year}-${mm}-${dd}`;
+        const remainder = line.slice(remainderStart).trim();
+        if(remainder.length === 0) continue; // pure date header line
+        line = remainder; // fall through: treat remainder as a task line below
+      }
+
+      if(SKIP_LINES.has(line.toLowerCase())) continue;
+
+      let title = line.replace(BULLET_RE, "").replace(NUMBERED_RE, "").trim();
+      if(!title) continue;
+
+      const cat = currentCategory || categoryLabelDefault;
+      if(cat && !/^[【<＜]/.test(title)){
+        title = `【${cat}】${title}`;
+      }
+
+      results.push({ title, dueDate: currentDate });
+      if(results.length >= 100) break;
+    }
+    return results;
+  }
+
+  /* ---- Paste UI wiring ---- */
+  $("#parseBtn").addEventListener("click", ()=>{
+    const text = $("#pasteInput").value;
+    if(!text.trim()){ showToast("テキストを貼り付けてください"); return; }
+    const parsed = parseTasksFromText(text, null);
+    renderPreviewList(parsed);
+  });
+
+  function renderPreviewList(items){
+    const list = $("#previewList");
+    list.innerHTML = "";
+    items.forEach(item=>{
+      const li = document.createElement("li");
+      li.className = "preview-item";
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "task-check";
+      check.checked = true;
+      const fields = document.createElement("div");
+      fields.className = "preview-fields";
+      const titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.className = "text-input preview-title";
+      titleInput.value = item.title;
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.className = "text-input preview-date";
+      dateInput.value = item.dueDate || "";
+      fields.appendChild(titleInput);
+      fields.appendChild(dateInput);
+      li.appendChild(check);
+      li.appendChild(fields);
+      list.appendChild(li);
+    });
+    $("#pasteResultCount").textContent = items.length + "件";
+    $("#pasteResults").hidden = items.length === 0;
+    if(items.length === 0) showToast("タスクらしい行が見つかりませんでした");
+  }
+
+  $("#cancelPasteBtn").addEventListener("click", ()=>{
+    $("#pasteResults").hidden = true;
+  });
+
+  $("#confirmPasteBtn").addEventListener("click", ()=>{
+    const rows = $$("#previewList .preview-item");
+    let added = 0;
+    rows.forEach(row=>{
+      const checked = row.querySelector(".task-check").checked;
+      if(!checked) return;
+      const title = row.querySelector(".preview-title").value.trim();
+      const dueDate = row.querySelector(".preview-date").value || null;
+      if(!title) return;
+      state.tasks.push({
+        id: uid(), title, tag: pasteTag, status: "todo",
+        notes: "貼り付けから自動登録",
+        dueDate, reminderAt: null, startDate: null, endDate: null,
+        createdAt: new Date().toISOString(), completedAt: null, notified: false
+      });
+      added++;
+    });
+    if(added === 0){ showToast("追加するタスクを選択してください"); return; }
+    saveState();
+    closeTaskModal();
+    refreshCurrentView();
+    showToast(`${added}件のタスクを追加しました ✓`);
+  });
+
   function openTaskModal(task, prefill){
     editingId = task ? task.id : null;
     pendingInboxId = (prefill && prefill.fromInboxId) || null;
@@ -490,6 +777,14 @@
     modalTag = task ? task.tag : "work_general";
     $$("#categoryPills .pill").forEach(b=>b.classList.toggle("is-active", b.dataset.category===modalCategory));
     buildTagPills();
+
+    $("#modeSwitch").hidden = !!task; // paste mode only makes sense for brand-new tasks
+    setModalMode("manual");
+    $("#pasteInput").value = "";
+    $("#pasteResults").hidden = true;
+    pasteCategory = "work"; pasteTag = "work_general";
+    $$("#pasteCategoryPills .pill").forEach(b=>b.classList.toggle("is-active", b.dataset.category==="work"));
+    buildPasteTagPills();
 
     overlay.hidden = false;
     setTimeout(()=> $("#taskTitle").focus(), 50);
@@ -637,6 +932,7 @@
   document.body.dataset.theme = state.settings.theme || "dark";
   buildTagPills();
   checkReminders();
+  setupCloudSync();
   switchView("today");
 
   window.addEventListener("resize", ()=>{

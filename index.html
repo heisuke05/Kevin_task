@@ -100,6 +100,22 @@
     <!-- ---- Settings View ---- -->
     <section class="view" id="view-settings" hidden>
       <div class="settings-card">
+        <h3>☁️ クラウド同期（PC⇄スマホ）</h3>
+        <p class="muted-text">Googleアカウントでログインすると、タスクがすべての端末で自動的に揃います。</p>
+        <div id="syncSignedOut">
+          <button class="btn-secondary" id="googleSignInBtn">🔐 Googleでログイン</button>
+        </div>
+        <div class="sync-signed-in" id="syncSignedIn" hidden>
+          <div class="sync-user">
+            <img id="syncUserPhoto" class="sync-avatar" alt="" />
+            <span id="syncUserName" class="sync-user-name"></span>
+          </div>
+          <span class="status-pill" id="syncStatusPill">未同期</span>
+          <button class="btn-secondary" id="googleSignOutBtn">ログアウト</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
         <h3>🔔 通知</h3>
         <p class="muted-text">ブラウザ通知でリマインダーを受け取れます（アプリを開いている必要があります）。</p>
         <button class="btn-secondary" id="settingsNotifBtn">通知を許可する</button>
@@ -162,6 +178,13 @@
       <h3 id="modalTitle">新規タスク</h3>
       <button class="icon-btn" id="modalCloseBtn">✕</button>
     </div>
+
+    <div class="mode-switch" id="modeSwitch">
+      <button type="button" class="mode-btn is-active" data-mode="manual">✍️ 手入力</button>
+      <button type="button" class="mode-btn" data-mode="paste">📋 貼り付けで一括登録</button>
+    </div>
+
+    <!-- ---- Manual entry ---- -->
     <form id="taskForm" class="modal-body">
       <input type="hidden" id="taskId" />
 
@@ -216,6 +239,32 @@
         <button type="submit" class="btn-primary">保存</button>
       </div>
     </form>
+
+    <!-- ---- Paste & auto-sort entry ---- -->
+    <div class="modal-body" id="pasteEntrySection" hidden>
+      <p class="hint-text">お知らせ文や日程表をそのまま貼り付けると、日付ごとに自動でタスクへ振り分けます。</p>
+      <textarea id="pasteInput" class="text-input" rows="8" placeholder="例）&#10;7月10日（金）&#10;・参拝者人数報告書&#10;・祖霊碑お供え申込&#10;&#10;7月16日（木）&#10;・送迎便乗車名簿"></textarea>
+
+      <label class="field-label">カテゴリ（全タスク共通）</label>
+      <div class="pill-group" id="pasteCategoryPills">
+        <button type="button" class="pill" data-category="private">🟣 プライベート</button>
+        <button type="button" class="pill is-active" data-category="work">🔵 仕事</button>
+      </div>
+
+      <label class="field-label">タグ（全タスク共通）</label>
+      <div class="pill-group" id="pasteTagPills"></div>
+
+      <button type="button" class="btn-primary btn-block" id="parseBtn">🔍 解析してプレビュー</button>
+
+      <div id="pasteResults" hidden>
+        <div class="paste-results-head"><span id="pasteResultCount">0件</span>見つかりました。内容を確認してから追加してください。</div>
+        <ul class="preview-list" id="previewList"></ul>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancelPasteBtn">キャンセル</button>
+          <button type="button" class="btn-primary" id="confirmPasteBtn">✅ 選択したタスクを追加</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -224,6 +273,10 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-sync.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
