@@ -17,9 +17,11 @@
     x:                { label: "X投稿",            color: "#22d3ee", category: "work" },
     note:             { label: "note",              color: "#34d399", category: "work" },
     substack:         { label: "Substack",          color: "#f97316", category: "work" },
+    ai_tool:          { label: "AIツール",          color: "#f472b6", category: "work" },
+    stock:            { label: "Stockアフィリエイト", color: "#facc15", category: "work" },
     work_general:     { label: "仕事(その他)",      color: "#60a5fa", category: "work" }
   };
-  const TAG_ORDER = ["private_general","dojo","web","x","note","substack","work_general"];
+  const TAG_ORDER = ["private_general","dojo","web","x","note","substack","ai_tool","stock","work_general"];
 
   /* ---------------- State ---------------- */
   let state = loadState();
