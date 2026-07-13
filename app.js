@@ -192,9 +192,25 @@
       e.stopPropagation();
       t.status = check.checked ? "done" : "todo";
       t.completedAt = check.checked ? new Date().toISOString() : null;
+      let repeatMsg = null;
+      if(check.checked && t.repeatEveryDays && !t.spawnedNext){
+        t.spawnedNext = true;
+        const baseDate = t.dueDate || todayStr();
+        const nextDue = addDays(baseDate, t.repeatEveryDays);
+        state.tasks.push({
+          id: uid(), title: t.title, tag: t.tag, status: "todo",
+          notes: t.notes || "",
+          dueDate: nextDue, reminderAt: null, startDate: null, endDate: null,
+          repeatEveryDays: t.repeatEveryDays, spawnedNext: false,
+          createdAt: new Date().toISOString(), completedAt: null, notified: false
+        });
+        repeatMsg = `完了にしました ✓（次回 ${formatDateLabel(nextDue)} のタスクを自動作成しました）`;
+      } else if(!check.checked){
+        t.spawnedNext = false;
+      }
       saveState();
       refreshCurrentView();
-      showToast(check.checked ? "完了にしました ✓" : "未完了に戻しました");
+      showToast(repeatMsg || (check.checked ? "完了にしました ✓" : "未完了に戻しました"));
     });
 
     const main = document.createElement("div");
@@ -220,6 +236,12 @@
       r.className = "reminder-chip";
       r.textContent = "🔔 " + formatDateTimeLabel(t.reminderAt);
       meta.appendChild(r);
+    }
+    if(t.repeatEveryDays){
+      const rep = document.createElement("span");
+      rep.className = "due-chip";
+      rep.textContent = t.repeatEveryDays===1 ? "🔁 毎日" : t.repeatEveryDays===7 ? "🔁 毎週" : `🔁 ${t.repeatEveryDays}日ごと`;
+      meta.appendChild(rep);
     }
 
     main.addEventListener("click", ()=> openTaskModal(t));
@@ -562,7 +584,15 @@
   let editingId = null;
   let modalCategory = "work";
   let modalTag = "work_general";
+  let modalRepeat = 0;
   let pendingInboxId = null;
+
+  $$("#repeatPills .pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      modalRepeat = parseInt(btn.dataset.repeat, 10) || 0;
+      $$("#repeatPills .pill").forEach(b=> b.classList.toggle("is-active", b===btn));
+    });
+  });
 
   function buildTagPills(){
     const wrap = $("#tagPills");
@@ -785,6 +815,9 @@
     $("#taskEnd").value = task ? (task.endDate||"") : "";
     $("#deleteTaskBtn").hidden = !task;
 
+    modalRepeat = task ? (task.repeatEveryDays || 0) : 0;
+    $$("#repeatPills .pill").forEach(b=> b.classList.toggle("is-active", parseInt(b.dataset.repeat,10)===modalRepeat));
+
     modalCategory = task ? TAGS[task.tag].category : "work";
     modalTag = task ? task.tag : "work_general";
     $$("#categoryPills .pill").forEach(b=>b.classList.toggle("is-active", b.dataset.category===modalCategory));
@@ -823,6 +856,7 @@
         reminderAt: $("#taskReminder").value || null,
         startDate: $("#taskStart").value || null,
         endDate: $("#taskEnd").value || null,
+        repeatEveryDays: modalRepeat || null,
         notified: false
       });
     } else {
@@ -833,6 +867,8 @@
         reminderAt: $("#taskReminder").value || null,
         startDate: $("#taskStart").value || null,
         endDate: $("#taskEnd").value || null,
+        repeatEveryDays: modalRepeat || null,
+        spawnedNext: false,
         createdAt: new Date().toISOString(),
         completedAt: null,
         notified: false

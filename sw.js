@@ -1,5 +1,5 @@
 /* TaskFlow — minimal service worker for offline shell + home-screen install */
-const CACHE_NAME = "taskflow-cache-v4";
+const CACHE_NAME = "taskflow-cache-v5";
 const ASSETS = [
   "./",
   "./index.html",
