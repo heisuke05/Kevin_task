@@ -1,1836 +1,282 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Tasks" />
-  <meta name="theme-color" content="#ffffff" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <title>タスク管理</title>
-  <style>
-    /* ─────────────── Design tokens ─────────────── */
-    :root {
-      --bg:         #ffffff;
-      --sidebar-bg: #f7f7f5;
-      --border:     #e9e9e7;
-      --text:       #37352f;
-      --muted:      #9b9a97;
-      --hover:      rgba(55,53,47,0.06);
-      --active:     rgba(55,53,47,0.12);
-      --blue:       #2383e2;
-      --red:        #e03e3e;
-      --yellow:     #c88018;
-      --green:      #0f7b6c;
-      --r-sm:       3px;
-      --r-md:       5px;
-      --r-lg:       8px;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: 'Inter', -apple-system, 'Hiragino Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      height: 100vh;
-      display: flex;
-      overflow: hidden;
-    }
-
-    /* ─────────────── Sidebar ─────────────── */
-    .sidebar {
-      width: 240px;
-      min-width: 240px;
-      background: var(--sidebar-bg);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow-y: auto;
-      transition: transform 0.2s;
-    }
-
-    .sidebar-top { padding: 10px 10px 4px; }
-
-    .workspace {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border-radius: var(--r-md);
-      cursor: default;
-      font-size: 14px;
-      font-weight: 600;
-      transition: background 0.1s;
-    }
-
-    .workspace-icon {
-      width: 24px; height: 24px;
-      background: linear-gradient(135deg, #2383e2 0%, #6940a5 100%);
-      border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0;
-    }
-
-    .sidebar-section { padding: 4px 10px; }
-
-    .sidebar-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      padding: 8px 8px 3px;
-    }
-
-    .s-item {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 4px 8px;
-      border-radius: var(--r-md);
-      cursor: pointer;
-      font-size: 13.5px;
-      color: var(--text);
-      transition: background 0.1s;
-      user-select: none;
-    }
-
-    .s-item:hover { background: var(--hover); }
-    .s-item.active { background: var(--active); font-weight: 500; }
-
-    .s-icon { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; opacity: 0.75; }
-    .s-count { margin-left: auto; font-size: 11px; color: var(--muted); }
-
-    .sidebar-divider { height: 1px; background: var(--border); margin: 6px 12px; }
-
-    .sidebar-bottom { margin-top: auto; padding: 8px 10px 12px; }
-
-    /* ── Stock view ── */
-    .stock-toolbar { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; }
-    .stock-load-btn {
-      padding: 7px 16px; background: var(--blue); color: #fff; border: none;
-      border-radius: var(--r-md); font-size: 13px; font-weight: 500;
-      cursor: pointer; font-family: inherit;
-    }
-    .stock-load-btn:hover { opacity: 0.88; }
-    .stock-load-status { font-size: 12px; color: var(--muted); }
-    .stock-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-    .stock-list-done { opacity: 0.5; }
-    .stock-card {
-      border: 1px solid var(--border); border-radius: var(--r-lg);
-      padding: 12px 14px; background: var(--bg);
-      transition: border-color 0.15s;
-    }
-    .stock-card:hover { border-color: var(--blue); }
-    .stock-card.stock-done { opacity: 0.55; }
-    .stock-card-header { display: flex; align-items: flex-start; gap: 10px; }
-    .stock-check { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; margin-top: 1px; }
-    .stock-check input { display: none; }
-    .stock-check-box {
-      width: 17px; height: 17px; border: 2px solid var(--border);
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      transition: all 0.15s; flex-shrink: 0;
-    }
-    .stock-check input:checked ~ .stock-check-box {
-      background: var(--green); border-color: var(--green);
-    }
-    .stock-check input:checked ~ .stock-check-box::after { content: '✓'; color: #fff; font-size: 10px; }
-    .stock-card-title { flex: 1; font-weight: 600; font-size: 13.5px; line-height: 1.4; }
-    .stock-type-badge {
-      font-size: 10.5px; font-weight: 600; padding: 2px 8px;
-      border-radius: 99px; background: rgba(35,131,226,0.12); color: var(--blue);
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .stock-tweet-text {
-      margin-top: 10px; padding: 10px 12px;
-      background: var(--sidebar-bg); border-radius: var(--r-md);
-      font-size: 12.5px; line-height: 1.6; white-space: pre-wrap;
-      font-family: inherit; color: var(--text); border: none;
-      cursor: text; user-select: all;
-    }
-
-    .new-btn {
-      display: flex; align-items: center; gap: 6px;
-      width: 100%; padding: 5px 8px;
-      border: none; background: none;
-      color: var(--muted); font-family: inherit; font-size: 13px;
-      cursor: pointer; border-radius: var(--r-md); transition: all 0.1s;
-    }
-    .new-btn:hover { background: var(--hover); color: var(--text); }
-
-    /* ─────────────── Main column ─────────────── */
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-      min-width: 0;
-    }
-
-    /* Topbar */
-    .topbar {
-      height: 44px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      padding: 0 20px;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .topbar-title { font-size: 13px; color: var(--muted); flex: 1; font-weight: 500; }
-
-    .t-btn {
-      display: flex; align-items: center; gap: 4px;
-      padding: 4px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      background: none; font-family: inherit; font-size: 12px;
-      cursor: pointer; color: var(--text); transition: background 0.1s;
-      white-space: nowrap;
-    }
-    .t-btn:hover { background: var(--hover); }
-    .t-btn svg { width: 13px; height: 13px; }
-
-    .t-btn-primary {
-      background: var(--blue); color: #fff; border-color: var(--blue);
-    }
-    .t-btn-primary:hover { background: #1a73d8; }
-
-    .t-search {
-      display: flex; align-items: center; gap: 5px;
-      padding: 4px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      background: var(--sidebar-bg);
-      width: 160px;
-    }
-    .t-search svg { width: 12px; height: 12px; color: var(--muted); flex-shrink: 0; }
-    .t-search input {
-      border: none; background: none;
-      font-family: inherit; font-size: 12px; color: var(--text); outline: none; width: 100%;
-    }
-    .t-search input::placeholder { color: var(--muted); }
-
-    /* Content */
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 40px 60px 40px;
-    }
-
-    .page-title {
-      font-size: 30px;
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 6px;
-    }
-
-    .page-meta {
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 20px;
-    }
-
-    /* ─────────────── Today stats ─────────────── */
-    .stats-row {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .stat-card {
-      flex: 1;
-      background: var(--sidebar-bg);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      padding: 14px 18px;
-    }
-
-    .stat-val { font-size: 26px; font-weight: 700; line-height: 1; }
-    .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 3px; }
-
-    /* ─────────────── Database table ─────────────── */
-    .db-wrap {
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      overflow: hidden;
-    }
-
-    .db-head {
-      display: grid;
-      grid-template-columns: 34px minmax(0,1fr) 150px 88px 108px 72px;
-      background: var(--sidebar-bg);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .db-hcell {
-      padding: 6px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      letter-spacing: 0.02em;
-    }
-
-    .db-hcell svg { width: 12px; height: 12px; }
-
-    .db-row {
-      display: grid;
-      grid-template-columns: 34px minmax(0,1fr) 150px 88px 108px 72px;
-      border-bottom: 1px solid var(--border);
-      transition: background 0.08s;
-    }
-
-    .db-row:last-child { border-bottom: none; }
-    .db-row:hover { background: var(--hover); }
-    .db-row.done-row { opacity: 0.45; }
-
-    .db-cell {
-      padding: 7px 10px;
-      display: flex;
-      align-items: center;
-      min-height: 36px;
-      font-size: 13.5px;
-    }
-
-    /* Checkbox */
-    .chk {
-      width: 15px; height: 15px;
-      border-radius: 3px;
-      border: 1.5px solid var(--border);
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      transition: all 0.1s;
-      background: none;
-      font-size: 9px;
-      font-weight: 700;
-    }
-    .chk:hover { border-color: var(--blue); }
-    .chk.on { background: var(--blue); border-color: var(--blue); color: #fff; }
-
-    /* Title cell */
-    .title-cell {
-      cursor: pointer;
-      gap: 6px;
-      overflow: hidden;
-    }
-
-    .title-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-
-    .open-icon {
-      opacity: 0;
-      color: var(--muted);
-      flex-shrink: 0;
-      transition: opacity 0.1s;
-    }
-
-    .open-icon svg { width: 11px; height: 11px; }
-    .db-row:hover .open-icon { opacity: 1; }
-
-    /* Tags */
-    .tags-cell { gap: 3px; flex-wrap: wrap; }
-
-    .tag {
-      font-size: 10.5px;
-      font-weight: 500;
-      padding: 2px 6px;
-      border-radius: var(--r-sm);
-      white-space: nowrap;
-    }
-
-    .tag-Web     { background: #dbeafe; color: #1e40af; }
-    .tag-Dojo    { background: #fef3c7; color: #92400e; }
-    .tag-Shidobu { background: #fce7f3; color: #9d174d; }
-    .tag-HQ      { background: #dcfce7; color: #166534; }
-
-    /* Priority */
-    .prio {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 12px;
-    }
-
-    .pdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .p-high   .pdot { background: var(--red); }
-    .p-medium .pdot { background: var(--yellow); }
-    .p-low    .pdot { background: #d1d5db; }
-    .p-high   { color: var(--red); }
-    .p-medium { color: var(--yellow); }
-    .p-low    { color: var(--muted); }
-
-    /* Due */
-    .due { font-size: 12px; color: var(--muted); }
-    .due.late { color: var(--red); font-weight: 500; }
-
-    /* Row actions */
-    .row-acts {
-      gap: 2px;
-      justify-content: flex-end;
-      opacity: 0;
-      transition: opacity 0.1s;
-    }
-    .db-row:hover .row-acts { opacity: 1; }
-
-    .r-btn {
-      width: 24px; height: 24px;
-      border-radius: var(--r-sm);
-      border: none; background: none;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--muted); transition: all 0.1s;
-    }
-    .r-btn:hover { background: var(--active); color: var(--text); }
-    .r-btn svg { width: 12px; height: 12px; }
-
-    /* Add row */
-    .add-row-btn {
-      display: flex; align-items: center; gap: 7px;
-      padding: 7px 12px;
-      cursor: pointer;
-      color: var(--muted); font-size: 13px;
-      border-top: 1px solid var(--border);
-      transition: background 0.1s;
-      font-family: inherit;
-      background: none; border-left: none; border-right: none; border-bottom: none;
-      width: 100%;
-      text-align: left;
-    }
-    .add-row-btn:hover { background: var(--hover); color: var(--text); }
-
-    .empty-db {
-      padding: 48px 20px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 13.5px;
-    }
-
-    /* ─────────────── Note panel ─────────────── */
-    .note-panel {
-      width: 0;
-      overflow: hidden;
-      border-left: 1px solid var(--border);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background: var(--bg);
-      transition: width 0.2s ease;
-      flex-shrink: 0;
-    }
-
-    .note-panel.open { width: 380px; }
-
-    .note-inner {
-      width: 380px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .note-topbar {
-      height: 44px;
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center;
-      padding: 0 14px; gap: 6px;
-      flex-shrink: 0;
-    }
-
-    .note-bread {
-      font-size: 11px; color: var(--muted);
-      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-
-    .np-btn {
-      width: 26px; height: 26px;
-      border-radius: var(--r-sm);
-      border: none; background: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--muted); transition: all 0.1s;
-    }
-    .np-btn:hover { background: var(--hover); color: var(--text); }
-    .np-btn svg { width: 14px; height: 14px; }
-
-    .note-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px 20px 16px;
-    }
-
-    .note-page-title {
-      font-size: 22px;
-      font-weight: 700;
-      line-height: 1.3;
-      margin-bottom: 14px;
-      word-break: break-word;
-    }
-
-    .note-props {
-      display: flex; flex-direction: column; gap: 4px;
-      margin-bottom: 18px;
-      padding-bottom: 18px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .note-prop {
-      display: flex; align-items: center; gap: 10px;
-      padding: 4px 0;
-      font-size: 13px;
-      min-height: 28px;
-    }
-
-    .note-prop-lbl {
-      width: 72px; flex-shrink: 0;
-      font-size: 12px; color: var(--muted);
-      display: flex; align-items: center; gap: 5px;
-    }
-
-    .note-prop-lbl svg { width: 12px; height: 12px; }
-
-    .note-prop-val { flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-
-    .note-edit-row {
-      display: flex; gap: 6px; margin-bottom: 16px;
-    }
-
-    .note-edit-btn {
-      flex: 1;
-      padding: 5px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      background: none; font-family: inherit; font-size: 12px;
-      cursor: pointer; color: var(--muted); transition: all 0.1s;
-      text-align: center;
-    }
-    .note-edit-btn:hover { background: var(--hover); color: var(--text); border-color: var(--text); }
-    .note-edit-btn.danger:hover { color: var(--red); border-color: var(--red); }
-
-    .note-memo-label {
-      font-size: 11px; font-weight: 600;
-      color: var(--muted); text-transform: uppercase;
-      letter-spacing: 0.07em; margin-bottom: 8px;
-    }
-
-    #note-ta {
-      width: 100%;
-      border: none; outline: none;
-      font-family: inherit; font-size: 13.5px;
-      line-height: 1.8; color: var(--text);
-      resize: none; min-height: 180px;
-      background: transparent;
-    }
-
-    #note-ta::placeholder { color: #d1cfca; }
-
-    .note-footer {
-      padding: 8px 14px;
-      border-top: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-      flex-shrink: 0;
-    }
-
-    .save-st { font-size: 11px; color: var(--muted); }
-
-    .save-now-btn {
-      padding: 4px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      background: none; font-family: inherit; font-size: 11px;
-      cursor: pointer; color: var(--muted); transition: all 0.1s;
-    }
-    .save-now-btn:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
-
-    /* ─────────────── Quick-add dialog ─────────────── */
-    .qd-overlay {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(15,15,15,0.35);
-      z-index: 200;
-      align-items: flex-start; justify-content: center;
-      padding-top: 72px;
-    }
-    .qd-overlay.open { display: flex; }
-
-    .qd {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      width: 100%; max-width: 540px;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.14);
-      overflow: hidden;
-      animation: fade-up 0.15s ease;
-    }
-
-    @keyframes fade-up {
-      from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-      to   { opacity: 1; transform: none; }
-    }
-
-    .qd-body { padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 12px; }
-
-    .qd-title-input {
-      width: 100%; font-family: inherit;
-      font-size: 18px; font-weight: 500;
-      border: none; outline: none; color: var(--text);
-      background: transparent;
-    }
-    .qd-title-input::placeholder { color: #d1cfca; }
-
-    .qd-hr { height: 1px; background: var(--border); }
-
-    .qd-row { display: flex; align-items: center; gap: 8px; }
-    .qd-lbl { font-size: 11.5px; color: var(--muted); width: 56px; flex-shrink: 0; }
-
-    .tag-tog {
-      padding: 2px 8px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-sm);
-      font-family: inherit; font-size: 11px; font-weight: 500;
-      cursor: pointer; background: none; color: var(--muted);
-      transition: all 0.1s;
-    }
-    .tag-tog.on-Web     { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
-    .tag-tog.on-Dojo    { background: #fef3c7; color: #92400e; border-color: #fde68a; }
-    .tag-tog.on-Shidobu { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
-    .tag-tog.on-HQ      { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
-
-    .prio-tog {
-      padding: 2px 8px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-sm);
-      font-family: inherit; font-size: 11px;
-      cursor: pointer; background: none; color: var(--muted);
-      transition: all 0.1s;
-    }
-    .prio-tog.on-high   { background: #fee2e2; color: var(--red); border-color: #fca5a5; font-weight: 600; }
-    .prio-tog.on-medium { background: #fef3c7; color: var(--yellow); border-color: #fde68a; font-weight: 600; }
-    .prio-tog.on-low    { background: #f3f4f6; color: var(--muted); border-color: #d1d5db; font-weight: 600; }
-
-    .qd-date {
-      font-family: inherit; font-size: 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-sm);
-      padding: 2px 8px; outline: none; color: var(--text);
-    }
-    .qd-date:focus { border-color: var(--blue); }
-
-    .qd-footer {
-      padding: 10px 20px;
-      background: var(--sidebar-bg);
-      border-top: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-
-    .qd-hint { font-size: 11px; color: var(--muted); }
-
-    .qd-submit {
-      padding: 5px 14px;
-      background: var(--blue); color: #fff;
-      border: none; border-radius: var(--r-md);
-      font-family: inherit; font-size: 12.5px; font-weight: 500;
-      cursor: pointer; transition: background 0.1s;
-    }
-    .qd-submit:hover { background: #1a73d8; }
-
-    /* ─────────────── Edit modal ─────────────── */
-    .modal-ov {
-      display: none; position: fixed; inset: 0;
-      background: rgba(15,15,15,0.35);
-      z-index: 300; align-items: center; justify-content: center; padding: 20px;
-    }
-    .modal-ov.open { display: flex; }
-
-    .modal {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      width: 100%; max-width: 480px;
-      max-height: 88vh; overflow-y: auto;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.14);
-      animation: fade-up 0.15s ease;
-    }
-
-    .modal-head {
-      padding: 16px 20px 12px;
-      border-bottom: 1px solid var(--border);
-      font-size: 15px; font-weight: 600;
-    }
-
-    .modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-
-    .m-field { display: flex; flex-direction: column; gap: 4px; }
-    .m-lbl { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .m-inp {
-      font-family: inherit; font-size: 13.5px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      padding: 7px 10px; outline: none; color: var(--text);
-      width: 100%;
-    }
-    .m-inp:focus { border-color: var(--blue); }
-    .m-ta { resize: vertical; min-height: 80px; }
-
-    .m-row2 { display: flex; gap: 10px; }
-    .m-row2 .m-field { flex: 1; }
-
-    .m-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-    .m-tag-lbl {
-      display: flex; align-items: center; gap: 5px;
-      cursor: pointer; font-size: 12px; font-weight: 500;
-      padding: 4px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-sm);
-      transition: all 0.1s; user-select: none;
-    }
-    .m-tag-lbl input { display: none; }
-    .m-tag-lbl.ck-Web     { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
-    .m-tag-lbl.ck-Dojo    { background: #fef3c7; color: #92400e; border-color: #fde68a; }
-    .m-tag-lbl.ck-Shidobu { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
-    .m-tag-lbl.ck-HQ      { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
-
-    .modal-foot {
-      padding: 12px 20px;
-      border-top: 1px solid var(--border);
-      display: flex; justify-content: flex-end; gap: 8px;
-    }
-
-    .m-cancel {
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      background: none; font-family: inherit; font-size: 12.5px;
-      cursor: pointer; color: var(--muted);
-    }
-    .m-save {
-      padding: 6px 16px;
-      background: var(--blue); color: #fff;
-      border: none; border-radius: var(--r-md);
-      font-family: inherit; font-size: 12.5px; font-weight: 500;
-      cursor: pointer;
-    }
-
-    /* ─────────────── Notion import modal ─────────────── */
-    .notion-ov {
-      display: none; position: fixed; inset: 0;
-      background: rgba(15,15,15,0.35);
-      z-index: 400; align-items: flex-start; justify-content: center;
-      padding-top: 64px;
-    }
-    .notion-ov.open { display: flex; }
-
-    .notion-modal {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      width: 100%; max-width: 520px;
-      max-height: 86vh; overflow-y: auto;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.14);
-      animation: fade-up 0.15s ease;
-    }
-
-    .notion-head {
-      padding: 16px 20px 12px;
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-    }
-
-    .n-logo {
-      width: 26px; height: 26px;
-      background: #000; border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0;
-    }
-
-    .notion-head h2 { font-size: 14.5px; font-weight: 600; flex: 1; }
-
-    .notion-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-
-    .n-step {
-      background: var(--sidebar-bg);
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      padding: 12px 14px;
-    }
-
-    .n-step-num {
-      font-size: 10px; font-weight: 700; color: var(--blue);
-      text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px;
-    }
-
-    .n-step p { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
-    .n-step a { color: var(--blue); font-weight: 500; text-decoration: none; }
-    .n-step a:hover { text-decoration: underline; }
-    .n-step code { background: var(--border); border-radius: 3px; padding: 1px 5px; font-size: 0.88em; }
-
-    .n-field { display: flex; flex-direction: column; gap: 4px; }
-    .n-lbl { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .n-inp {
-      font-family: inherit; font-size: 13px;
-      border: 1px solid var(--border); border-radius: var(--r-md);
-      padding: 7px 10px; outline: none; color: var(--text); width: 100%;
-    }
-    .n-inp:focus { border-color: var(--blue); }
-
-    .n-map-row {
-      display: flex; align-items: center; gap: 8px; font-size: 12.5px;
-    }
-    .n-map-lbl { width: 72px; flex-shrink: 0; color: var(--muted); }
-    .n-map-sel {
-      flex: 1; font-family: inherit; font-size: 12px;
-      border: 1px solid var(--border); border-radius: var(--r-sm);
-      padding: 4px 8px; outline: none; color: var(--text);
-    }
-
-    .n-spinner {
-      display: none; align-items: center; gap: 8px;
-      font-size: 12.5px; color: var(--muted);
-    }
-    .spinner {
-      width: 16px; height: 16px;
-      border: 2px solid var(--border);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .n-ok { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--r-md); padding: 10px 14px; font-size: 12.5px; color: #166534; display: none; }
-    .n-err { background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--r-md); padding: 10px 14px; font-size: 12.5px; color: #991b1b; display: none; }
-
-    .notion-foot {
-      padding: 12px 20px;
-      border-top: 1px solid var(--border);
-      display: flex; justify-content: flex-end; gap: 8px;
-    }
-    .n-cancel { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: none; font-family: inherit; font-size: 12.5px; cursor: pointer; color: var(--muted); }
-    .n-fetch  { padding: 6px 14px; background: #111; color: #fff; border: none; border-radius: var(--r-md); font-family: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
-    .n-import { display: none; padding: 6px 14px; background: var(--blue); color: #fff; border: none; border-radius: var(--r-md); font-family: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
-
-    /* ─────────────── Mobile ─────────────── */
-    @media (max-width: 800px) {
-      .sidebar {
-        position: fixed; left: 0; top: 0; z-index: 150;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 16px rgba(0,0,0,0.1);
-      }
-      .sidebar.open { transform: none; }
-      .mob-overlay {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.3); z-index: 149;
-      }
-      .mob-overlay.open { display: block; }
-
-      .content { padding: 20px 16px; }
-
-      .db-head { display: none; }
-      .db-row  { grid-template-columns: 26px 1fr 70px; grid-template-rows: auto auto; gap: 0; }
-      .db-cell { min-height: 0; }
-      .tags-cell  { grid-column: 2; padding-top: 0; }
-      .prio-cell  { display: none; }
-      .due-cell   { display: none; }
-      .row-acts   { grid-column: 3; grid-row: 1 / 3; align-items: center; opacity: 1; }
-
-      .note-panel.open { position: fixed; inset: 0; width: 100% !important; z-index: 120; }
-
-      .stats-row { grid-template-columns: 1fr 1fr; }
-      .page-title { font-size: 22px; }
-
-      .topbar { padding: 0 12px; }
-      .t-search { display: none; }
-
-      .qd { max-width: 100%; margin: 0 12px; }
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TaskFlow — 個人タスク管理</title>
+<meta name="description" content="プライベート・仕事のタスクとメモを一元管理するパーソナルタスク管理アプリ" />
+<meta name="theme-color" content="#0b0b0f" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
 </head>
-<body>
+<body data-theme="dark">
+<div id="app">
 
-<!-- Mobile overlay for sidebar -->
-<div class="mob-overlay" id="mob-ov" onclick="closeSidebar()"></div>
-
-<!-- ─── Sidebar ─── -->
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-top">
-    <div class="workspace">
-      <div class="workspace-icon">T</div>
-      タスク管理
+  <!-- ===== Desktop Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">TaskFlow</span>
     </div>
-  </div>
 
-  <div class="sidebar-section">
-    <button class="s-item active" data-view="today">
-      <span class="s-icon">📅</span> 今日
-      <span class="s-count" id="sc-today">0</span>
-    </button>
-    <button class="s-item" data-view="all">
-      <span class="s-icon">
-        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></svg>
-      </span> すべて
-      <span class="s-count" id="sc-all">0</span>
-    </button>
-    <button class="s-item" data-view="high">
-      <span class="s-icon">🔴</span> 高優先度
-      <span class="s-count" id="sc-high">0</span>
-    </button>
-    <button class="s-item" data-view="done">
-      <span class="s-icon">✅</span> 完了済み
-      <span class="s-count" id="sc-done">0</span>
-    </button>
-  </div>
+    <nav class="nav" id="sideNav">
+      <button class="nav-item is-active" data-view="today"><span class="ic">🏠</span>今日</button>
+      <button class="nav-item" data-view="inbox"><span class="ic">📝</span>メモ / Inbox<span class="badge" id="inboxBadge" hidden>0</span></button>
+      <button class="nav-item" data-view="tasks"><span class="ic">✅</span>すべてのタスク</button>
+      <button class="nav-item" data-view="gantt"><span class="ic">📊</span>ガントチャート</button>
+      <button class="nav-item" data-view="settings"><span class="ic">⚙️</span>設定</button>
+    </nav>
 
-  <div class="sidebar-divider"></div>
-
-  <div class="sidebar-section">
-    <div class="sidebar-label">タグ</div>
-    <button class="s-item" data-view="tag-Web">
-      <span class="s-icon">🌐</span> Web
-      <span class="s-count" id="sc-Web">0</span>
-    </button>
-    <button class="s-item" data-view="tag-Dojo">
-      <span class="s-icon">🥋</span> Dojo
-      <span class="s-count" id="sc-Dojo">0</span>
-    </button>
-    <button class="s-item" data-view="tag-Shidobu">
-      <span class="s-icon">📖</span> Shidobu
-      <span class="s-count" id="sc-Shidobu">0</span>
-    </button>
-    <button class="s-item" data-view="tag-HQ">
-      <span class="s-icon">🏢</span> HQ
-      <span class="s-count" id="sc-HQ">0</span>
-    </button>
-  </div>
-
-  <div class="sidebar-divider"></div>
-
-  <div class="sidebar-section">
-    <div class="sidebar-label">X 投稿</div>
-    <button class="s-item" data-view="stock">
-      <span class="s-icon">📈</span> Stock
-      <span class="s-count" id="sc-stock">0</span>
-    </button>
-  </div>
-
-  <div class="sidebar-bottom">
-    <div class="sidebar-divider" style="margin: 0 0 8px"></div>
-    <button class="new-btn" onclick="openQD()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      新規タスク
-    </button>
-    <button class="new-btn" onclick="openNotionModal()" style="margin-top:2px">
-      <span style="font-size:11px;font-weight:700;background:#000;color:#fff;border-radius:3px;padding:1px 4px;line-height:1.4">N</span>
-      Notion インポート
-    </button>
-  </div>
-</aside>
-
-<!-- ─── Main column ─── -->
-<div class="main">
-  <!-- Topbar -->
-  <div class="topbar">
-    <button class="t-btn" id="mob-menu-btn" onclick="openSidebar()" style="display:none;border:none;padding:4px 6px">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <span class="topbar-title" id="topbar-title">今日</span>
-    <div class="t-search">
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="search" id="search-inp" placeholder="検索..." oninput="renderMain()" />
+    <div class="sidebar-footer">
+      <button class="btn-primary btn-block" id="sideQuickAddBtn">＋ 新規タスク</button>
+      <div class="stat-line">今日の残り <strong id="todayCount">0</strong> 件</div>
     </div>
-    <button class="t-btn t-btn-primary" onclick="openQD()">
-      <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      新規
-    </button>
-  </div>
+  </aside>
 
-  <!-- Content -->
-  <div class="content" id="content">
-    <!-- rendered by JS -->
-  </div>
+  <!-- ===== Main ===== -->
+  <main class="main">
+    <header class="topbar">
+      <h1 id="viewTitle">今日</h1>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="notifBtn" title="通知を有効化">🔔</button>
+        <button class="btn-primary" id="quickAddBtn">＋ 新規</button>
+      </div>
+    </header>
+
+    <!-- ---- Today View ---- -->
+    <section class="view" id="view-today">
+      <div class="inbox-banner" id="inboxBanner" hidden>
+        📝 未整理のメモが <strong id="inboxBannerCount">0</strong> 件あります
+        <button class="link-btn" data-goto="inbox">確認する →</button>
+      </div>
+
+      <div id="overdueBlock" hidden>
+        <h2 class="section-title danger">⏰ 期限超過</h2>
+        <ul class="task-list" id="overdueList"></ul>
+      </div>
+
+      <h2 class="section-title">📅 今日やること</h2>
+      <ul class="task-list" id="todayList"></ul>
+      <p class="empty-hint" id="todayEmptyHint" hidden>今日のタスクはありません。ゆっくりどうぞ 🌿</p>
+
+      <h2 class="section-title muted">🔜 明日以降（直近5件）</h2>
+      <ul class="task-list" id="upcomingList"></ul>
+    </section>
+
+    <!-- ---- Inbox View ---- -->
+    <section class="view" id="view-inbox" hidden>
+      <form id="inboxForm" class="inbox-capture">
+        <textarea id="inboxInput" placeholder="思いついたことをここにサッと書く…（Enterで追加 / Shift+Enterで改行）" rows="3"></textarea>
+        <button type="submit" class="btn-primary">追加</button>
+      </form>
+      <ul class="inbox-list" id="inboxList"></ul>
+      <p class="empty-hint" id="inboxEmptyHint" hidden>メモはありません。何か思いついたら書いてみましょう。</p>
+    </section>
+
+    <!-- ---- All Tasks View ---- -->
+    <section class="view" id="view-tasks" hidden>
+      <div class="filter-row" id="filterRow"></div>
+      <label class="toggle-line">
+        <input type="checkbox" id="showDoneToggle" />
+        完了済みも表示する
+      </label>
+      <div id="tasksByTag"></div>
+    </section>
+
+    <!-- ---- Gantt View (desktop only) ---- -->
+    <section class="view" id="view-gantt" hidden>
+      <p class="hint-text">開始日・終了日が設定されているタスクのみ表示されます。タスク編集画面で「ガントチャート用の日付」を設定してください。</p>
+      <div id="ganttContainer" class="gantt-container"></div>
+      <p class="empty-hint" id="ganttEmptyHint" hidden>ガントチャート用のタスクがまだありません。</p>
+      <p class="mobile-only-hint">📱 ガントチャートはPC画面でご利用いただけます。</p>
+    </section>
+
+    <!-- ---- Settings View ---- -->
+    <section class="view" id="view-settings" hidden>
+      <div class="settings-card">
+        <h3>☁️ クラウド同期（PC⇄スマホ）</h3>
+        <p class="muted-text">Googleアカウントでログインすると、タスクがすべての端末で自動的に揃います。</p>
+        <div id="syncSignedOut">
+          <button class="btn-secondary" id="googleSignInBtn">🔐 Googleでログイン</button>
+        </div>
+        <div class="sync-signed-in" id="syncSignedIn" hidden>
+          <div class="sync-user">
+            <img id="syncUserPhoto" class="sync-avatar" alt="" />
+            <span id="syncUserName" class="sync-user-name"></span>
+          </div>
+          <span class="status-pill" id="syncStatusPill">未同期</span>
+          <button class="btn-secondary" id="googleSignOutBtn">ログアウト</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>🔔 通知</h3>
+        <p class="muted-text">ブラウザ通知でリマインダーを受け取れます（アプリを開いている必要があります）。</p>
+        <button class="btn-secondary" id="settingsNotifBtn">通知を許可する</button>
+        <span class="status-pill" id="notifStatusPill">未設定</span>
+      </div>
+
+      <div class="settings-card">
+        <h3>🎨 テーマ</h3>
+        <p class="muted-text">基本はダークモードです。お好みでライトモードに切り替えられます。</p>
+        <label class="toggle-line">
+          <input type="checkbox" id="lightModeToggle" />
+          ライトモードにする
+        </label>
+      </div>
+
+      <div class="settings-card">
+        <h3>📲 ホーム画面に追加</h3>
+        <p class="muted-text">ホーム画面に追加すると、アプリのようにワンタップで起動できます。</p>
+        <button class="btn-secondary" id="installBtn" hidden>ホーム画面に追加</button>
+        <details class="ios-hint">
+          <summary>iPhoneでの追加方法</summary>
+          <p>Safariで開き、共有ボタン <strong>□↑</strong> → 「ホーム画面に追加」をタップ</p>
+        </details>
+      </div>
+
+      <div class="settings-card">
+        <h3>💾 バックアップ</h3>
+        <p class="muted-text">データはこの端末のブラウザ内に保存されています。他の端末に移す場合は、エクスポートしたファイルをインポートしてください。</p>
+        <div class="btn-row">
+          <button class="btn-secondary" id="exportBtn">エクスポート</button>
+          <label class="btn-secondary file-btn">
+            インポート
+            <input type="file" id="importFile" accept="application/json" hidden />
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-card danger-card">
+        <h3>🗑 データを削除</h3>
+        <p class="muted-text">すべてのタスク・メモを削除します。元に戻せません。</p>
+        <button class="btn-danger" id="clearAllBtn">全データを削除</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Mobile Bottom Nav ===== -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bn-item is-active" data-view="today"><span class="ic">🏠</span><span class="lb">今日</span></button>
+    <button class="bn-item" data-view="inbox"><span class="ic">📝</span><span class="lb">メモ</span><span class="badge" id="inboxBadgeMobile" hidden>0</span></button>
+    <button class="bn-fab" id="fabBtn">＋</button>
+    <button class="bn-item" data-view="tasks"><span class="ic">✅</span><span class="lb">タスク</span></button>
+    <button class="bn-item" data-view="settings"><span class="ic">⚙️</span><span class="lb">設定</span></button>
+  </nav>
 </div>
 
-<!-- ─── Note panel ─── -->
-<aside class="note-panel" id="note-panel">
-  <div class="note-inner">
-    <div class="note-topbar">
-      <span class="note-bread" id="note-bread">タスク管理 / ...</span>
-      <button class="np-btn" onclick="closeNote()" title="閉じる">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-    <div class="note-body" id="note-body">
-      <div class="note-page-title" id="note-pt"></div>
-      <div class="note-props" id="note-props"></div>
-      <div class="note-edit-row">
-        <button class="note-edit-btn" onclick="openEditFromNote()">編集</button>
-        <button class="note-edit-btn danger" onclick="deleteFromNote()">削除</button>
-      </div>
-      <div class="note-memo-label">メモ</div>
-      <textarea id="note-ta" placeholder="ここにメモを書いてください…&#10;&#10;• 進捗&#10;• 参考リンク&#10;• アイデア" oninput="onNoteInput()"></textarea>
-    </div>
-    <div class="note-footer">
-      <span class="save-st" id="save-st">保存済み</span>
-      <button class="save-now-btn" onclick="saveNote()">保存</button>
-    </div>
-  </div>
-</aside>
-
-<!-- ─── Quick-add dialog ─── -->
-<div class="qd-overlay" id="qd-ov" onclick="closeQD(event)">
-  <div class="qd">
-    <div class="qd-body">
-      <input class="qd-title-input" id="qd-title" placeholder="タスク名を入力..." autocomplete="off" />
-      <div class="qd-hr"></div>
-      <div class="qd-row">
-        <span class="qd-lbl">タグ</span>
-        <button class="tag-tog" data-tag="Web">Web</button>
-        <button class="tag-tog" data-tag="Dojo">Dojo</button>
-        <button class="tag-tog" data-tag="Shidobu">Shidobu</button>
-        <button class="tag-tog" data-tag="HQ">HQ</button>
-      </div>
-      <div class="qd-row">
-        <span class="qd-lbl">重要度</span>
-        <button class="prio-tog" data-prio="high">🔴 高</button>
-        <button class="prio-tog on-medium" data-prio="medium">🟡 普通</button>
-        <button class="prio-tog" data-prio="low">⚪ 低</button>
-      </div>
-      <div class="qd-row">
-        <span class="qd-lbl">期限日</span>
-        <input type="date" class="qd-date" id="qd-due" />
-      </div>
-    </div>
-    <div class="qd-footer">
-      <span class="qd-hint">Enter で追加 · Esc で閉じる</span>
-      <button class="qd-submit" onclick="submitQD()">追加</button>
-    </div>
-  </div>
-</div>
-
-<!-- ─── Edit modal ─── -->
-<div class="modal-ov" id="edit-ov" onclick="closeEditModal(event)">
+<!-- ===== Task Editor Modal ===== -->
+<div class="modal-overlay" id="taskModalOverlay" hidden>
   <div class="modal">
-    <div class="modal-head" id="edit-modal-title">タスクを編集</div>
-    <div class="modal-body">
-      <div class="m-field">
-        <span class="m-lbl">タスク名</span>
-        <input class="m-inp" id="e-title" type="text" />
-      </div>
-      <div class="m-field">
-        <span class="m-lbl">タグ</span>
-        <div class="m-tags">
-          <label class="m-tag-lbl" data-tag="Web"><input type="checkbox" value="Web" onchange="syncMTag(this)" />Web</label>
-          <label class="m-tag-lbl" data-tag="Dojo"><input type="checkbox" value="Dojo" onchange="syncMTag(this)" />Dojo</label>
-          <label class="m-tag-lbl" data-tag="Shidobu"><input type="checkbox" value="Shidobu" onchange="syncMTag(this)" />Shidobu</label>
-          <label class="m-tag-lbl" data-tag="HQ"><input type="checkbox" value="HQ" onchange="syncMTag(this)" />HQ</label>
-        </div>
-      </div>
-      <div class="m-row2">
-        <div class="m-field">
-          <span class="m-lbl">重要度</span>
-          <select class="m-inp" id="e-priority">
-            <option value="high">🔴 高</option>
-            <option value="medium">🟡 普通</option>
-            <option value="low">⚪ 低</option>
-          </select>
-        </div>
-        <div class="m-field">
-          <span class="m-lbl">期限日</span>
-          <input class="m-inp" type="date" id="e-due" />
-        </div>
-      </div>
+    <div class="modal-header">
+      <h3 id="modalTitle">新規タスク</h3>
+      <button class="icon-btn" id="modalCloseBtn">✕</button>
     </div>
-    <div class="modal-foot">
-      <button class="m-cancel" onclick="closeEditModal()">キャンセル</button>
-      <button class="m-save" onclick="saveEdit()">保存</button>
-    </div>
-  </div>
-</div>
 
-<!-- ─── Notion import modal ─── -->
-<div class="notion-ov" id="notion-ov" onclick="closeNotionModal(event)">
-  <div class="notion-modal">
-    <div class="notion-head">
-      <div class="n-logo">N</div>
-      <h2>Notion からインポート</h2>
-      <button class="np-btn" onclick="closeNotionModal()" style="margin-left:auto">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+    <div class="mode-switch" id="modeSwitch">
+      <button type="button" class="mode-btn is-active" data-mode="manual">✍️ 手入力</button>
+      <button type="button" class="mode-btn" data-mode="paste">📋 貼り付けで一括登録</button>
     </div>
-    <div class="notion-body">
-      <div class="n-step">
-        <div class="n-step-num">Step 1 — インテグレーション作成</div>
-        <p><a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a> で新規インテグレーションを作成し、トークン（<code>secret_xxx</code>）をコピーしてください。</p>
-      </div>
-      <div class="n-step">
-        <div class="n-step-num">Step 2 — データベースを接続</div>
-        <p>対象 DB ページ右上「…」→「コネクト」→ 作成したインテグレーションを選択。</p>
-      </div>
-      <div class="n-field">
-        <span class="n-lbl">インテグレーショントークン <span style="color:var(--red)">*</span></span>
-        <input class="n-inp" type="password" id="n-token" placeholder="secret_xxxxxxxxxxxxxxxx" autocomplete="off" />
-      </div>
-      <div class="n-field">
-        <span class="n-lbl">データベース ID <span style="color:var(--red)">*</span></span>
-        <input class="n-inp" type="text" id="n-dbid" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
-        <span style="font-size:11px;color:var(--muted)">URL 末尾の32文字 — <code>notion.so/xxx/<strong>ここ</strong>?v=…</code></span>
+
+    <!-- ---- Manual entry ---- -->
+    <form id="taskForm" class="modal-body">
+      <input type="hidden" id="taskId" />
+
+      <label class="field-label">タイトル</label>
+      <input type="text" id="taskTitle" class="text-input" placeholder="例）Noteに投稿する" required />
+
+      <label class="field-label">カテゴリ</label>
+      <div class="pill-group" id="categoryPills">
+        <button type="button" class="pill" data-category="private">🟣 プライベート</button>
+        <button type="button" class="pill is-active" data-category="work">🔵 仕事</button>
       </div>
 
-      <!-- Mapping section (hidden until schema fetched) -->
-      <div id="n-map-sec" style="display:none">
-        <div class="n-step">
-          <div class="n-step-num">Step 3 — フィールドのマッピング</div>
-          <div style="display:flex;flex-direction:column;gap:7px;margin-top:8px" id="n-map-rows">
-            <div class="n-map-row"><span class="n-map-lbl">タスク名</span><select class="n-map-sel" id="nm-title"></select></div>
-            <div class="n-map-row"><span class="n-map-lbl">重要度</span><select class="n-map-sel" id="nm-priority"></select></div>
-            <div class="n-map-row"><span class="n-map-lbl">期限日</span><select class="n-map-sel" id="nm-due"></select></div>
-            <div class="n-map-row"><span class="n-map-lbl">完了</span><select class="n-map-sel" id="nm-done"></select></div>
-            <div class="n-map-row"><span class="n-map-lbl">タグ列</span><select class="n-map-sel" id="nm-tags"></select></div>
+      <label class="field-label">タグ</label>
+      <div class="pill-group" id="tagPills"></div>
+
+      <div class="field-grid">
+        <div>
+          <label class="field-label">期限日</label>
+          <input type="date" id="taskDue" class="text-input" />
+        </div>
+        <div>
+          <label class="field-label">リマインド日時</label>
+          <input type="datetime-local" id="taskReminder" class="text-input" />
+        </div>
+      </div>
+
+      <details class="gantt-fields">
+        <summary>ガントチャート用の日付（任意）</summary>
+        <div class="field-grid">
+          <div>
+            <label class="field-label">開始日</label>
+            <input type="date" id="taskStart" class="text-input" />
+          </div>
+          <div>
+            <label class="field-label">終了日</label>
+            <input type="date" id="taskEnd" class="text-input" />
           </div>
         </div>
+      </details>
+
+      <label class="field-label">メモ</label>
+      <textarea id="taskNotes" class="text-input" rows="3" placeholder="詳細メモ（任意）"></textarea>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cal" id="gcalBtn">📅 Googleカレンダーに追加</button>
       </div>
 
-      <div class="n-spinner" id="n-spinner"><div class="spinner"></div><span id="n-spin-msg">接続中...</span></div>
-      <div class="n-ok" id="n-ok"></div>
-      <div class="n-err" id="n-err"></div>
-    </div>
-    <div class="notion-foot">
-      <button class="n-cancel" onclick="closeNotionModal()">閉じる</button>
-      <button class="n-fetch" id="n-fetch-btn" onclick="notionFetch()">プロパティを取得</button>
-      <button class="n-import" id="n-import-btn" onclick="notionImport()">インポート実行</button>
+      <div class="modal-footer">
+        <button type="button" class="btn-danger btn-ghost" id="deleteTaskBtn" hidden>削除</button>
+        <div class="spacer"></div>
+        <button type="button" class="btn-secondary" id="cancelTaskBtn">キャンセル</button>
+        <button type="submit" class="btn-primary">保存</button>
+      </div>
+    </form>
+
+    <!-- ---- Paste & auto-sort entry ---- -->
+    <div class="modal-body" id="pasteEntrySection" hidden>
+      <p class="hint-text">お知らせ文や日程表をそのまま貼り付けると、日付ごとに自動でタスクへ振り分けます。</p>
+      <textarea id="pasteInput" class="text-input" rows="8" placeholder="例）&#10;7月10日（金）&#10;・参拝者人数報告書&#10;・祖霊碑お供え申込&#10;&#10;7月16日（木）&#10;・送迎便乗車名簿"></textarea>
+
+      <label class="field-label">カテゴリ（全タスク共通）</label>
+      <div class="pill-group" id="pasteCategoryPills">
+        <button type="button" class="pill" data-category="private">🟣 プライベート</button>
+        <button type="button" class="pill is-active" data-category="work">🔵 仕事</button>
+      </div>
+
+      <label class="field-label">タグ（全タスク共通）</label>
+      <div class="pill-group" id="pasteTagPills"></div>
+
+      <button type="button" class="btn-primary btn-block" id="parseBtn">🔍 解析してプレビュー</button>
+
+      <div id="pasteResults" hidden>
+        <div class="paste-results-head"><span id="pasteResultCount">0件</span>見つかりました。内容を確認してから追加してください。</div>
+        <ul class="preview-list" id="previewList"></ul>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancelPasteBtn">キャンセル</button>
+          <button type="button" class="btn-primary" id="confirmPasteBtn">✅ 選択したタスクを追加</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<script>
-/* ═══════════════════════════════════════════════
-   State & Storage
-════════════════════════════════════════════════ */
-const KEY = 'tasks_v2';
-let tasks = JSON.parse(localStorage.getItem(KEY) || '[]');
-let view = 'today';          // current sidebar view
-let noteId = null;           // currently open note
-let editId = null;           // currently editing task
-let noteSaveTimer = null;
-
-const TODAY = new Date().toISOString().slice(0, 10);
-const PRIO_ORDER = { high: 0, medium: 1, low: 2 };
-const PRIO_LABEL = { high: '高', medium: '普通', low: '低' };
-const VIEW_TITLES = {
-  today: '今日', all: 'すべてのタスク', high: '高優先度', done: '完了済み',
-  'tag-Web': 'Web', 'tag-Dojo': 'Dojo', 'tag-Shidobu': 'Shidobu', 'tag-HQ': 'HQ',
-  stock: '📈 Stock — X投稿',
-};
-
-function persist() { localStorage.setItem(KEY, JSON.stringify(tasks)); }
-
-function save() { persist(); renderAll(); }
-
-/* ═══════════════════════════════════════════════
-   Sidebar switching
-════════════════════════════════════════════════ */
-document.querySelectorAll('.s-item[data-view]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    view = btn.dataset.view;
-    document.querySelectorAll('.s-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('topbar-title').textContent = VIEW_TITLES[view] || view;
-    closeSidebar();
-    renderMain();
-  });
-});
-
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('mob-ov').classList.add('open');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('mob-ov').classList.remove('open');
-}
-
-/* ═══════════════════════════════════════════════
-   Counts (sidebar badges)
-════════════════════════════════════════════════ */
-function updateCounts() {
-  const active = tasks.filter(t => !t.done);
-  const todayCnt = active.filter(t => !t.due || t.due === TODAY).length;
-  document.getElementById('sc-today').textContent = todayCnt;
-  document.getElementById('sc-all').textContent = active.length;
-  document.getElementById('sc-high').textContent = active.filter(t => t.priority === 'high').length;
-  document.getElementById('sc-done').textContent = tasks.filter(t => t.done).length;
-  ['Web','Dojo','Shidobu','HQ'].forEach(tag => {
-    document.getElementById(`sc-${tag}`).textContent =
-      active.filter(t => (t.tags || []).includes(tag)).length;
-  });
-  document.getElementById('sc-stock').textContent =
-    active.filter(t => (t.tags || []).includes('Stock') && !t.done).length;
-}
-
-/* ═══════════════════════════════════════════════
-   Main render
-════════════════════════════════════════════════ */
-function filterTasks() {
-  const q = (document.getElementById('search-inp').value || '').toLowerCase();
-  let list = tasks.filter(t => {
-    if (view === 'today') return !t.done && (!t.due || t.due === TODAY);
-    if (view === 'all')   return !t.done;
-    if (view === 'high')  return !t.done && t.priority === 'high';
-    if (view === 'done')  return t.done;
-    if (view.startsWith('tag-')) return !t.done && (t.tags || []).includes(view.slice(4));
-    return true;
-  });
-  if (q) list = list.filter(t =>
-    t.title.toLowerCase().includes(q) ||
-    (t.note || '').toLowerCase().includes(q) ||
-    (t.tags || []).some(g => g.toLowerCase().includes(q))
-  );
-  return list.sort((a, b) => PRIO_ORDER[a.priority] - PRIO_ORDER[b.priority] || b.createdAt - a.createdAt);
-}
-
-function renderMain() {
-  const el = document.getElementById('content');
-  const list = filterTasks();
-  const title = VIEW_TITLES[view] || view;
-
-  if (view === 'today') {
-    el.innerHTML = renderTodayView(list);
-  } else if (view === 'stock') {
-    el.innerHTML = renderStockView();
-    return;
-  } else {
-    el.innerHTML = `
-      <div class="page-title">${esc(title)}</div>
-      <div class="page-meta">${list.length} 件</div>
-      ${renderDB(list)}
-    `;
-  }
-  bindTableEvents();
-}
-
-/* ═══════════════════════════════════════════════
-   Stock view — X投稿タスク
-════════════════════════════════════════════════ */
-const STOCK_API = 'http://132.145.113.221:8080/stock-tasks.json';
-
-function renderStockView() {
-  const stockTasks = tasks.filter(t => (t.tags || []).includes('Stock') && !t.done);
-  const doneTasks  = tasks.filter(t => (t.tags || []).includes('Stock') && t.done);
-  const d = new Date();
-  const days = ['日','月','火','水','木','金','土'];
-  const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
-
-  const renderCard = (t) => `
-    <div class="stock-card ${t.done ? 'stock-done' : ''}" data-id="${t.id}">
-      <div class="stock-card-header">
-        <label class="stock-check">
-          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleStockDone(${t.id})">
-          <span class="stock-check-box"></span>
-        </label>
-        <div class="stock-card-title">${esc(t.title)}</div>
-        <span class="stock-type-badge">${esc((t.note || '').split('\n')[0].replace('種別: ',''))}</span>
-      </div>
-      ${t.note && t.note.split('\n').slice(1).join('\n').trim() ? `
-        <pre class="stock-tweet-text">${esc(t.note.split('\n').slice(1).join('\n').trim())}</pre>
-      ` : ''}
-    </div>`;
-
-  return `
-    <div class="page-title">📈 Stock — X投稿</div>
-    <div class="page-meta">${dateStr} · 未投稿 ${stockTasks.length} 件</div>
-
-    <div class="stock-toolbar">
-      <button class="stock-load-btn" onclick="loadStockTasks()">
-        🔄 今日の投稿を取得
-      </button>
-      <span class="stock-load-status" id="stock-load-status"></span>
-    </div>
-
-    ${stockTasks.length === 0 ? `<div class="empty-state" style="margin-top:32px">投稿タスクはありません<br><span style="font-size:12px;color:var(--muted)">「今日の投稿を取得」で読み込んでください</span></div>` : ''}
-    <div class="stock-list">
-      ${stockTasks.map(renderCard).join('')}
-    </div>
-
-    ${doneTasks.length > 0 ? `
-      <div class="page-meta" style="margin-top:24px">✅ 投稿済み ${doneTasks.length} 件</div>
-      <div class="stock-list stock-list-done">
-        ${doneTasks.map(renderCard).join('')}
-      </div>
-    ` : ''}
-  `;
-}
-
-function toggleStockDone(id) {
-  const t = tasks.find(t => t.id === id);
-  if (!t) return;
-  t.done = !t.done;
-  t.updatedAt = Date.now();
-  save();
-}
-
-async function loadStockTasks() {
-  const status = document.getElementById('stock-load-status');
-  if (status) status.textContent = '取得中...';
-  try {
-    const res = await fetch(STOCK_API, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const posts = data.posts || [];
-    let added = 0;
-    for (const p of posts) {
-      const exists = tasks.some(t => (t.tags||[]).includes('Stock') && t.title === p.title && t.due === TODAY);
-      if (!exists) {
-        tasks.unshift({
-          id: Date.now() + Math.random(),
-          title: p.title,
-          tags: ['Stock'],
-          priority: 'high',
-          due: TODAY,
-          note: `種別: ${p.type}\n${p.text}`,
-          done: false,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-        added++;
-      }
-    }
-    save();
-    if (status) status.textContent = added > 0 ? `✅ ${added} 件追加しました` : '（本日分は取得済みです）';
-  } catch (e) {
-    if (status) status.textContent = `❌ 取得失敗: ${e.message}`;
-  }
-}
-
-function renderTodayView(list) {
-  const d = new Date();
-  const days = ['日','月','火','水','木','金','土'];
-  const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
-  const allActive = tasks.filter(t => !t.done);
-  const overdue = allActive.filter(t => t.due && t.due < TODAY);
-
-  return `
-    <div class="page-title">${dateStr}</div>
-    <div class="page-meta">未完了 ${allActive.length} 件${overdue.length ? ` · 期限超過 ${overdue.length} 件` : ''}</div>
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-val">${list.length}</div>
-        <div class="stat-lbl">今日のタスク</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-val" style="color:var(--red)">${allActive.filter(t=>t.priority==='high').length}</div>
-        <div class="stat-lbl">高優先度</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-val" style="color:var(--green)">${tasks.filter(t=>t.done).length}</div>
-        <div class="stat-lbl">完了済み</div>
-      </div>
-    </div>
-    ${renderDB(list)}
-  `;
-}
-
-function renderDB(list) {
-  if (list.length === 0) return `
-    <div class="db-wrap">
-      <div class="empty-db">タスクがありません</div>
-      <button class="add-row-btn" onclick="openQD()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        新規タスクを追加
-      </button>
-    </div>`;
-
-  return `
-    <div class="db-wrap">
-      <div class="db-head">
-        <div class="db-hcell"></div>
-        <div class="db-hcell">タスク名</div>
-        <div class="db-hcell">タグ</div>
-        <div class="db-hcell">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          重要度
-        </div>
-        <div class="db-hcell">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          期限日
-        </div>
-        <div class="db-hcell"></div>
-      </div>
-      ${list.map(renderRow).join('')}
-      <button class="add-row-btn" onclick="openQD()">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        新規
-      </button>
-    </div>`;
-}
-
-function renderRow(t) {
-  const overdue = t.due && t.due < TODAY && !t.done;
-  const tags = (t.tags || []).map(g => `<span class="tag tag-${esc(g)}">${esc(g)}</span>`).join('');
-  return `
-    <div class="db-row ${t.done ? 'done-row' : ''}" data-id="${t.id}">
-      <div class="db-cell db-cell-check" style="justify-content:center">
-        <div class="chk ${t.done?'on':''}" data-chk="${t.id}">${t.done?'✓':''}</div>
-      </div>
-      <div class="db-cell title-cell" data-open="${t.id}">
-        <span class="title-text">${esc(t.title)}</span>
-        <span class="open-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
-      </div>
-      <div class="db-cell tags-cell">${tags}</div>
-      <div class="db-cell prio-cell">
-        <div class="prio p-${t.priority}">
-          <div class="pdot"></div>${PRIO_LABEL[t.priority]}
-        </div>
-      </div>
-      <div class="db-cell due-cell">
-        <span class="due ${overdue?'late':''}">${t.due ? (overdue ? '⚠ ' : '📅 ') + t.due : ''}</span>
-      </div>
-      <div class="db-cell row-acts">
-        <button class="r-btn" data-edit="${t.id}" title="編集">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-        </button>
-        <button class="r-btn" data-del="${t.id}" title="削除">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-        </button>
-      </div>
-    </div>`;
-}
-
-function bindTableEvents() {
-  document.querySelectorAll('[data-chk]').forEach(el => {
-    el.onclick = () => toggleDone(Number(el.dataset.chk));
-  });
-  document.querySelectorAll('[data-open]').forEach(el => {
-    el.onclick = () => openNote(Number(el.dataset.open));
-  });
-  document.querySelectorAll('[data-edit]').forEach(el => {
-    el.onclick = e => { e.stopPropagation(); openEdit(Number(el.dataset.edit)); };
-  });
-  document.querySelectorAll('[data-del]').forEach(el => {
-    el.onclick = e => { e.stopPropagation(); deleteTask(Number(el.dataset.del)); };
-  });
-}
-
-function renderAll() { updateCounts(); renderMain(); }
-
-/* ═══════════════════════════════════════════════
-   CRUD
-════════════════════════════════════════════════ */
-function toggleDone(id) {
-  const t = tasks.find(t => t.id === id);
-  if (!t) return;
-  t.done = !t.done; t.updatedAt = Date.now(); save();
-}
-
-function deleteTask(id) {
-  if (!confirm('このタスクを削除しますか？')) return;
-  tasks = tasks.filter(t => t.id !== id);
-  if (noteId === id) closeNote();
-  save();
-}
-
-/* ═══════════════════════════════════════════════
-   Note panel
-════════════════════════════════════════════════ */
-function openNote(id) {
-  const t = tasks.find(t => t.id === id);
-  if (!t) return;
-  if (noteSaveTimer) { clearTimeout(noteSaveTimer); saveNote(); }
-  noteId = id;
-
-  document.getElementById('note-bread').textContent = `タスク管理 / ${t.title}`;
-  document.getElementById('note-pt').textContent = t.title;
-
-  const tags = (t.tags||[]).map(g => `<span class="tag tag-${esc(g)}">${esc(g)}</span>`).join(' ');
-  document.getElementById('note-props').innerHTML = `
-    <div class="note-prop">
-      <span class="note-prop-lbl"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> 重要度</span>
-      <div class="note-prop-val"><div class="prio p-${t.priority}"><div class="pdot"></div>${PRIO_LABEL[t.priority]}</div></div>
-    </div>
-    <div class="note-prop">
-      <span class="note-prop-lbl"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> 期限</span>
-      <div class="note-prop-val">${t.due ? `<span style="font-size:12.5px;color:var(--muted)">${t.due}</span>` : '<span style="font-size:12px;color:#d1cfca">なし</span>'}</div>
-    </div>
-    <div class="note-prop">
-      <span class="note-prop-lbl"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> タグ</span>
-      <div class="note-prop-val">${tags || '<span style="font-size:12px;color:#d1cfca">なし</span>'}</div>
-    </div>`;
-
-  document.getElementById('note-ta').value = t.note || '';
-  document.getElementById('save-st').textContent = '保存済み';
-  document.getElementById('note-panel').classList.add('open');
-  setTimeout(() => document.getElementById('note-ta').focus(), 250);
-}
-
-function closeNote() {
-  if (noteSaveTimer) { clearTimeout(noteSaveTimer); saveNote(); }
-  document.getElementById('note-panel').classList.remove('open');
-  noteId = null;
-}
-
-function onNoteInput() {
-  document.getElementById('save-st').textContent = '未保存…';
-  clearTimeout(noteSaveTimer);
-  noteSaveTimer = setTimeout(saveNote, 1500);
-}
-
-function saveNote() {
-  if (!noteId) return;
-  const t = tasks.find(t => t.id === noteId);
-  if (!t) return;
-  t.note = document.getElementById('note-ta').value;
-  t.updatedAt = Date.now();
-  persist();
-  document.getElementById('save-st').textContent = '保存済み ✓';
-  noteSaveTimer = null;
-  renderMain();
-}
-
-function openEditFromNote() { if (noteId) openEdit(noteId); }
-function deleteFromNote() { if (noteId) deleteTask(noteId); }
-
-/* ═══════════════════════════════════════════════
-   Quick-add dialog
-════════════════════════════════════════════════ */
-let qdTags = [];
-let qdPrio = 'medium';
-
-function openQD() {
-  qdTags = []; qdPrio = 'medium';
-  document.getElementById('qd-title').value = '';
-  document.getElementById('qd-due').value = '';
-  document.querySelectorAll('.tag-tog').forEach(b => b.className = 'tag-tog');
-  document.querySelectorAll('.prio-tog').forEach(b => {
-    b.className = 'prio-tog' + (b.dataset.prio === 'medium' ? ' on-medium' : '');
-  });
-  document.getElementById('qd-ov').classList.add('open');
-  setTimeout(() => document.getElementById('qd-title').focus(), 80);
-}
-
-function closeQD(e) {
-  if (e && e.target !== document.getElementById('qd-ov')) return;
-  document.getElementById('qd-ov').classList.remove('open');
-}
-
-document.querySelectorAll('.tag-tog').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tag = btn.dataset.tag;
-    if (qdTags.includes(tag)) {
-      qdTags = qdTags.filter(t => t !== tag);
-      btn.className = 'tag-tog';
-    } else {
-      qdTags.push(tag);
-      btn.className = `tag-tog on-${tag}`;
-    }
-  });
-});
-
-document.querySelectorAll('.prio-tog').forEach(btn => {
-  btn.addEventListener('click', () => {
-    qdPrio = btn.dataset.prio;
-    document.querySelectorAll('.prio-tog').forEach(b => b.className = 'prio-tog');
-    btn.className = `prio-tog on-${qdPrio}`;
-  });
-});
-
-document.getElementById('qd-title').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitQD();
-});
-
-function submitQD() {
-  const title = document.getElementById('qd-title').value.trim();
-  if (!title) return;
-  tasks.unshift({
-    id: Date.now(),
-    title,
-    tags: [...qdTags],
-    priority: qdPrio,
-    due: document.getElementById('qd-due').value,
-    note: '',
-    done: false,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-  save();
-  document.getElementById('qd-ov').classList.remove('open');
-}
-
-/* ═══════════════════════════════════════════════
-   Edit modal
-════════════════════════════════════════════════ */
-function openEdit(id) {
-  const t = tasks.find(t => t.id === id);
-  if (!t) return;
-  editId = id;
-  document.getElementById('e-title').value = t.title;
-  document.getElementById('e-priority').value = t.priority;
-  document.getElementById('e-due').value = t.due || '';
-  document.querySelectorAll('#edit-ov .m-tag-lbl').forEach(lbl => {
-    const cb = lbl.querySelector('input');
-    const has = (t.tags||[]).includes(cb.value);
-    cb.checked = has;
-    lbl.className = 'm-tag-lbl' + (has ? ` ck-${cb.value}` : '');
-  });
-  document.getElementById('edit-ov').classList.add('open');
-}
-
-function closeEditModal(e) {
-  if (e && e.target !== document.getElementById('edit-ov')) return;
-  document.getElementById('edit-ov').classList.remove('open');
-  editId = null;
-}
-
-function syncMTag(cb) {
-  const lbl = cb.closest('.m-tag-lbl');
-  lbl.className = 'm-tag-lbl' + (cb.checked ? ` ck-${cb.value}` : '');
-}
-
-function saveEdit() {
-  const t = tasks.find(t => t.id === editId);
-  if (!t) return;
-  const title = document.getElementById('e-title').value.trim();
-  if (title) t.title = title;
-  t.tags = [...document.querySelectorAll('#edit-ov input[type=checkbox]:checked')].map(c => c.value);
-  t.priority = document.getElementById('e-priority').value;
-  t.due = document.getElementById('e-due').value;
-  t.updatedAt = Date.now();
-  save();
-  if (noteId === editId) openNote(editId);
-  document.getElementById('edit-ov').classList.remove('open');
-  editId = null;
-}
-
-/* ═══════════════════════════════════════════════
-   Notion import
-════════════════════════════════════════════════ */
-function openNotionModal() {
-  document.getElementById('notion-ov').classList.add('open');
-  const cfg = JSON.parse(localStorage.getItem('notion_cfg') || '{}');
-  if (cfg.token) document.getElementById('n-token').value = cfg.token;
-  if (cfg.dbid)  document.getElementById('n-dbid').value = cfg.dbid;
-}
-
-function closeNotionModal(e) {
-  if (e && e.target !== document.getElementById('notion-ov')) return;
-  document.getElementById('notion-ov').classList.remove('open');
-}
-
-function nSpinner(msg)  { document.getElementById('n-spinner').style.display='flex'; document.getElementById('n-spin-msg').textContent=msg; nHideMsg(); }
-function nOk(msg)       { document.getElementById('n-spinner').style.display='none'; const el=document.getElementById('n-ok'); el.style.display='block'; el.textContent=msg; }
-function nErr(msg)      { document.getElementById('n-spinner').style.display='none'; const el=document.getElementById('n-err'); el.style.display='block'; el.textContent=msg; }
-function nHideMsg()     { document.getElementById('n-ok').style.display='none'; document.getElementById('n-err').style.display='none'; }
-
-// Use deployed Vercel API proxy if available, otherwise fall back to corsproxy.io
-function notionAPIBase() {
-  // On Vercel this will be /api/notion; locally fall back to corsproxy
-  return window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost'
-    ? '/api/notion'
-    : null; // will use corsproxy
-}
-
-async function notionReq(path, method='GET', body=null) {
-  const token = document.getElementById('n-token').value.trim();
-  const base = notionAPIBase();
-
-  let url, headers;
-  if (base) {
-    url = `${base}?path=${encodeURIComponent(path)}`;
-    headers = { 'Content-Type': 'application/json', 'x-notion-token': token };
-  } else {
-    url = `https://corsproxy.io/?url=${encodeURIComponent('https://api.notion.com' + path)}`;
-    headers = { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' };
-  }
-
-  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-  return data;
-}
-
-let notionProps = {};
-
-async function notionFetch() {
-  const token = document.getElementById('n-token').value.trim();
-  const dbid  = document.getElementById('n-dbid').value.trim().replace(/-/g,'');
-  if (!token || !dbid) { nErr('トークンとデータベース ID を入力してください。'); return; }
-  localStorage.setItem('notion_cfg', JSON.stringify({ token, dbid }));
-
-  nSpinner('データベースに接続中...');
-  document.getElementById('n-fetch-btn').disabled = true;
-
-  try {
-    const db = await notionReq(`/v1/databases/${dbid}`);
-    notionProps = db.properties || {};
-    const names = Object.keys(notionProps);
-
-    const selects = [
-      { id:'nm-title',    blank:'-- 選択 --',  auto:['名前','Name','タスク','Task','タイトル','Title','Todo','To-do'] },
-      { id:'nm-priority', blank:'(なし)',       auto:['優先度','Priority','重要度','Importance'] },
-      { id:'nm-due',      blank:'(なし)',       auto:['期限','期限日','Due','Due Date','締切','Deadline'] },
-      { id:'nm-done',     blank:'(なし)',       auto:['完了','Done','Checked','Status','チェック'] },
-      { id:'nm-tags',     blank:'(なし)',       auto:['タグ','Tags','カテゴリ','Category','Label'] },
-    ];
-
-    selects.forEach(({ id, blank, auto }) => {
-      const sel = document.getElementById(id);
-      sel.innerHTML = `<option value="">${blank}</option>` +
-        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-      for (const a of auto) {
-        const found = names.find(n => n.toLowerCase() === a.toLowerCase());
-        if (found) { sel.value = found; break; }
-      }
-    });
-
-    document.getElementById('n-map-sec').style.display = 'block';
-    document.getElementById('n-import-btn').style.display = 'inline-block';
-    nOk(`✅ ${names.length} 個のプロパティを検出しました。マッピングを確認してインポートを実行してください。`);
-  } catch (err) {
-    nErr(`❌ 接続エラー: ${err.message}`);
-  } finally {
-    document.getElementById('n-fetch-btn').disabled = false;
-  }
-}
-
-async function notionImport() {
-  const dbid = document.getElementById('n-dbid').value.trim().replace(/-/g,'');
-  const mapTitle    = document.getElementById('nm-title').value;
-  const mapPriority = document.getElementById('nm-priority').value;
-  const mapDue      = document.getElementById('nm-due').value;
-  const mapDone     = document.getElementById('nm-done').value;
-  const mapTags     = document.getElementById('nm-tags').value;
-  if (!mapTitle) { nErr('タスク名のプロパティを選択してください。'); return; }
-
-  nSpinner('タスクを取得中...');
-  document.getElementById('n-import-btn').disabled = true;
-
-  const ALLOWED = ['Web','Dojo','Shidobu','HQ'];
-  const PMAP = { '高':'high','High':'high','high':'high','🔴':'high','緊急':'high','Urgent':'high',
-    '普通':'medium','Medium':'medium','medium':'medium','Normal':'medium','🟡':'medium',
-    '低':'low','Low':'low','low':'low','⚪':'low' };
-
-  try {
-    let pages=[], cursor;
-    do {
-      const body = { page_size:100 };
-      if (cursor) body.start_cursor = cursor;
-      const r = await notionReq(`/v1/databases/${dbid}/query`, 'POST', body);
-      pages = pages.concat(r.results || []);
-      cursor = r.has_more ? r.next_cursor : null;
-    } while (cursor);
-
-    let imported=0, skipped=0;
-
-    for (const page of pages) {
-      const props = page.properties || {};
-      const titleProp = props[mapTitle];
-      let title = '';
-      if (titleProp?.title)      title = titleProp.title.map(t=>t.plain_text).join('').trim();
-      else if (titleProp?.rich_text) title = titleProp.rich_text.map(t=>t.plain_text).join('').trim();
-      if (!title) { skipped++; continue; }
-      if (tasks.find(t => t.title === title)) { skipped++; continue; }
-
-      let done = false;
-      if (mapDone && props[mapDone]) {
-        const dp = props[mapDone];
-        if (dp.type==='checkbox') done = !!dp.checkbox;
-        else if (dp.type==='status') done = ['Done','完了','Completed'].includes(dp.status?.name);
-        else if (dp.type==='select') done = ['Done','完了','Completed'].includes(dp.select?.name);
-      }
-
-      let priority = 'medium';
-      if (mapPriority && props[mapPriority]) {
-        const pp = props[mapPriority];
-        const raw = pp.select?.name || pp.multi_select?.[0]?.name || pp.rich_text?.[0]?.plain_text || '';
-        priority = PMAP[raw] || 'medium';
-      }
-
-      let due = '';
-      if (mapDue && props[mapDue]) {
-        const dp = props[mapDue];
-        if (dp.type==='date' && dp.date?.start) due = dp.date.start.slice(0,10);
-      }
-
-      let tags = [];
-      if (mapTags && props[mapTags]) {
-        const tp = props[mapTags];
-        const raw = [...(tp.multi_select?.map(t=>t.name)||[]), tp.select?.name].filter(Boolean);
-        tags = raw.filter(t => ALLOWED.includes(t));
-      }
-
-      tasks.push({
-        id: Date.now() + imported,
-        title, tags, priority, due,
-        note: page.url ? `Notion: ${page.url}` : '',
-        done,
-        createdAt: new Date(page.created_time).getTime() || Date.now(),
-        updatedAt: Date.now(),
-      });
-      imported++;
-    }
-
-    save();
-    nOk(`✅ ${imported} 件インポート完了（スキップ: ${skipped} 件）`);
-  } catch (err) {
-    nErr(`❌ インポートエラー: ${err.message}`);
-  } finally {
-    document.getElementById('n-import-btn').disabled = false;
-  }
-}
-
-/* ═══════════════════════════════════════════════
-   Keyboard & helpers
-════════════════════════════════════════════════ */
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    closeQD(); closeEditModal(); closeNote();
-    document.getElementById('notion-ov').classList.remove('open');
-  }
-  if ((e.metaKey||e.ctrlKey) && e.key==='k') { e.preventDefault(); openQD(); }
-  if ((e.metaKey||e.ctrlKey) && e.key==='n') { e.preventDefault(); openQD(); }
-});
-
-/* ═══════════════════════════════════════════════
-   Mobile detection
-════════════════════════════════════════════════ */
-function checkMobile() {
-  const isMob = window.innerWidth <= 800;
-  document.getElementById('mob-menu-btn').style.display = isMob ? '' : 'none';
-}
-window.addEventListener('resize', checkMobile);
-
-/* ═══════════════════════════════════════════════
-   PWA
-════════════════════════════════════════════════ */
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-}
-
-/* ═══════════════════════════════════════════════
-   URL params (extension integration)
-════════════════════════════════════════════════ */
-(function () {
-  const p = new URLSearchParams(location.search);
-  if (p.get('action') === 'add' && p.get('title')) {
-    tasks.unshift({ id:Date.now(), title:p.get('title'), tags:[], priority:'medium', due:'', note:p.get('note')||'', done:false, createdAt:Date.now(), updatedAt:Date.now() });
-    persist();
-    history.replaceState({}, '', location.pathname);
-  }
-})();
-
-/* ═══════════════════════════════════════════════
-   Init
-════════════════════════════════════════════════ */
-checkMobile();
-renderAll();
-</script>
+<!-- ===== Convert-to-task Modal reuses same modal ===== -->
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
