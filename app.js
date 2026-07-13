@@ -455,16 +455,25 @@
 
     cloud.onStatusChange((status)=>{ lastSyncStatus = status; updateSyncUI(); });
 
+    const SYNCED_DEVICE_KEY = "taskflow_cloud_synced_uid";
+
     cloud.onAuthChange(async (user)=>{
       updateSyncUI();
       if(!user){ hasDoneInitialSync = false; return; }
       if(hasDoneInitialSync) return;
       hasDoneInitialSync = true;
       try{
+        const alreadyResolvedOnThisDevice = localStorage.getItem(SYNCED_DEVICE_KEY) === user.uid;
         const remote = await cloud.fetchOnce(user.uid);
         const localHasData = state.tasks.length>0 || state.inbox.length>0;
         const remoteHasData = remote && (remote.tasks||[]).length>0;
-        if(remoteHasData && localHasData){
+
+        if(alreadyResolvedOnThisDevice){
+          // Already asked once on this device/account — don't ask again.
+          // From now on this device just trusts the cloud (kept in sync via the
+          // real-time listener below), so quietly pull the latest cloud state.
+          if(remoteHasData) applyRemoteState(remote);
+        } else if(remoteHasData && localHasData){
           const useCloud = confirm(
             "クラウドにも、この端末にもデータがあります。\n" +
             "「OK」＝クラウドのデータを使う（この端末のデータは上書きされます）\n" +
@@ -479,6 +488,7 @@
           await cloud.push(state);
           showToast("クラウドにバックアップしました");
         }
+        localStorage.setItem(SYNCED_DEVICE_KEY, user.uid);
       }catch(e){
         console.error("Initial sync failed", e);
         showToast("同期中にエラーが発生しました");
